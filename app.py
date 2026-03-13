@@ -805,20 +805,41 @@ if missing:
     st.stop()
 
 # ── Add qualification columns if absent — User ID pre-filled with "TE" prefix ──
-for col, default in [("Shift", ""), ("Key Failure", ""), ("User ID", "TE")]:
-    if col not in df_raw.columns:
-        df_raw[col] = default
+_QUAL_COLS_DEFAULTS = [
+    ("User ID",          "TE"),
+    ("Shift",            ""),
+    ("Key Failure",      ""),
+    ("Issue Description",""),
+    ("Action Taken",     ""),
+    ("Spare Part Ref",   ""),
+    ("Qty",              0),
+    ("Unit Price (€)",   0.0),
+    ("Total Part Cost",  0.0),
+]
+for _qc, _qd in _QUAL_COLS_DEFAULTS:
+    if _qc not in df_raw.columns:
+        df_raw[_qc] = _qd
 
 # ── Initialiser session_state.edited_df ──
 if st.session_state.edited_df is None:
     st.session_state.edited_df = df_raw.copy()
 
-# ── Ensure existing blank User IDs get "TE" prefix ──
+# ── Ensure existing blank User IDs get "TE" prefix & new cost cols exist ──
 _edf = st.session_state.edited_df
 if "User ID" in _edf.columns:
     _blank_uid = _edf["User ID"].astype(str).str.strip().isin(["", "nan", "None"])
     _edf.loc[_blank_uid, "User ID"] = "TE"
-    st.session_state.edited_df = _edf
+# Add any new cost columns that did not exist in saved state
+for _qc, _qd in _QUAL_COLS_DEFAULTS:
+    if _qc not in _edf.columns:
+        _edf[_qc] = _qd
+# Recalculate Total Part Cost
+if "Qty" in _edf.columns and "Unit Price (€)" in _edf.columns:
+    _edf["Total Part Cost"] = (
+        pd.to_numeric(_edf["Qty"], errors="coerce").fillna(0) *
+        pd.to_numeric(_edf["Unit Price (€)"], errors="coerce").fillna(0.0)
+    ).round(2)
+st.session_state.edited_df = _edf
 
 # ── Utiliser la version éditée (préserve les qualifications utilisateur) ──
 df_raw = st.session_state.edited_df.copy()
@@ -1076,8 +1097,15 @@ with tab_kpi:
     """, unsafe_allow_html=True)
 
     # ── KPI Cards ──────────────────────────────────────────────────────────────
+    # Compute total maintenance cost from session_state (live)
+    _total_cost = 0.0
+    if st.session_state.edited_df is not None and "Total Part Cost" in st.session_state.edited_df.columns:
+        _total_cost = float(
+            pd.to_numeric(st.session_state.edited_df["Total Part Cost"], errors="coerce")
+            .fillna(0).sum())
+
     st.markdown('<div class="te-section">Main KPIs</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     for col, icon, label, value, unit in [
         (c1, "⚡", "AVAILABILITY",
          f"{dispo}%", f"{'MTBF-based' if has_mtbf else 'Status-based'}"),
@@ -1088,10 +1116,15 @@ with tab_kpi:
          "Time between failures" if has_mtbf else "Column absent"),
         (c4, "⚠",  "TOTAL STOPS",
          f"{nb_arrets}", f"Out of {len(df):,} events"),
+        (c5, "💰", "TOTAL MAINT. COST",
+         f"€ {_total_cost:,.2f}", "Spare parts (qualified stops)"),
     ]:
         with col:
+            _cstyle = ("background:linear-gradient(135deg,#1a3a1a,#0d200d);"
+                       "border:1.5px solid #27AE60"
+                       if icon == "💰" and _total_cost > 0 else "")
             st.markdown(f"""
-            <div class="kpi-card">
+            <div class="kpi-card" style="{_cstyle}">
               <div class="kpi-icon">{icon}</div>
               <div class="kpi-label">{label}</div>
               <div class="kpi-value">{value}</div>
@@ -2282,6 +2315,179 @@ with tab_kpi:
                 "Shift / Key Failure columns not available.", S_BODY))
 
         # ══════════════════════════════════════════════════════════════════════
+        #  PAGE 7 — SPARE PARTS & MAINTENANCE COSTS
+        # ══════════════════════════════════════════════════════════════════════
+
+        story.append(PageBreak())
+
+        # ── Header block ──────────────────────────────────────────────────────
+        _hdr_cost = Table([[
+            Paragraph("💰  SPARE PARTS &amp; MAINTENANCE COSTS",
+                      ps("sph", fontSize=16, fontName="Helvetica-Bold",
+                         textColor=C_WH, leading=20)),
+            Paragraph("Financial breakdown by event",
+                      ps("sps", fontSize=9, textColor=HexColor("#FAD0A8"),
+                         fontName="Helvetica", leading=13, alignment=2)),
+        ]], colWidths=[IW * 0.65, IW * 0.35])
+        _hdr_cost.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0),(-1,-1), C_NAVY),
+            ("TOPPADDING",    (0,0),(-1,-1), 14),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 14),
+            ("LEFTPADDING",   (0,0),(-1,-1), 14),
+            ("RIGHTPADDING",  (0,0),(-1,-1), 14),
+            ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+        ]))
+        story.append(_hdr_cost)
+        story.append(hr(color=C_OR, thick=3))
+        story.append(Spacer(1, 0.2*cm))
+
+        # ── Compute cost data ─────────────────────────────────────────────────
+        if "Total Part Cost" in df_in.columns:
+            _cd = df_in[
+                pd.to_numeric(df_in["Total Part Cost"], errors="coerce")
+                .fillna(0) > 0
+            ].copy()
+        else:
+            _cd = pd.DataFrame()
+
+        _total_spend = float(
+            pd.to_numeric(df_in.get("Total Part Cost", pd.Series([0.0])),
+                          errors="coerce").fillna(0).sum()
+        ) if "Total Part Cost" in df_in.columns else 0.0
+
+        _n_cost_events = len(_cd)
+        _n_parts_filled = int(
+            _cd["Spare Part Ref"].astype(str).str.strip()
+            .replace({"":"", "nan":"", "None":""})
+            .ne("").sum()
+        ) if "Spare Part Ref" in _cd.columns else 0
+
+        # ── KPI summary strip ─────────────────────────────────────────────────
+        _kpi_cost_data = [
+            ["TOTAL SPEND", "EVENTS WITH COST", "PARTS REFERENCED"],
+            [f"€ {_total_spend:,.2f}",
+             str(_n_cost_events),
+             str(_n_parts_filled)],
+        ]
+        _kc = Table(_kpi_cost_data, colWidths=[IW/3]*3)
+        _kc.setStyle(TableStyle([
+            ("FONTNAME",      (0,0),(-1,0),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0,0),(-1,0),  8),
+            ("FONTNAME",      (0,1),(-1,1),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0,1),(-1,1),  16),
+            ("TEXTCOLOR",     (0,0),(-1,-1), C_WH),
+            ("ALIGN",         (0,0),(-1,-1), "CENTER"),
+            ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0),(-1,0),  8),
+            ("BOTTOMPADDING", (0,0),(-1,0),  4),
+            ("TOPPADDING",    (0,1),(-1,1),  8),
+            ("BOTTOMPADDING", (0,1),(-1,1),  12),
+            ("BACKGROUND",    (0,0),(0,-1),  C_OR),
+            ("BACKGROUND",    (1,0),(1,-1),  C_NAVY),
+            ("BACKGROUND",    (2,0),(2,-1),  HexColor("#2A4A6A")),
+            ("INNERGRID",     (0,0),(-1,-1), 2.0, C_WH),
+        ]))
+        story.append(_kc)
+        story.append(Spacer(1, 0.35*cm))
+
+        if not _cd.empty:
+            # ── Detail table ──────────────────────────────────────────────────
+            story.append(Paragraph("── Event Detail", S_SSEC))
+            story.append(hr(color=C_NAVY, thick=0.8))
+
+            _cost_hdr = [[
+                "Machine", "Date", "Shift", "Key Failure",
+                "Spare Part / Ref", "Qty",
+                "Unit Price (€)", "Total Cost (€)",
+            ]]
+            _cost_rows_pdf = []
+            _cost_extras   = []
+            for _ri, (_idx, _row) in enumerate(_cd.iterrows()):
+                _tc = float(pd.to_numeric(
+                    _row.get("Total Part Cost", 0), errors="coerce") or 0)
+                _cost_rows_pdf.append([
+                    str(_row.get(COL_MACHINE,  "—"))[:12],
+                    str(_row.get(COL_DATE,     "—"))[:10],
+                    str(_row.get("Shift",      "—"))[:4],
+                    str(_row.get("Key Failure","—"))[:28],
+                    str(_row.get("Spare Part Ref","—"))[:22],
+                    str(int(pd.to_numeric(
+                        _row.get("Qty",0), errors="coerce") or 0)),
+                    f"€ {float(pd.to_numeric(_row.get('Unit Price (€)',0),errors='coerce') or 0):.2f}",
+                    f"€ {_tc:.2f}",
+                ])
+                _ri_t = len(_cost_rows_pdf)
+                if _tc > 0:
+                    _cost_extras += [
+                        ("TEXTCOLOR",  (7, _ri_t),(7, _ri_t), C_OR),
+                        ("FONTNAME",   (7, _ri_t),(7, _ri_t), "Helvetica-Bold"),
+                    ]
+
+            _cws_cost = [IW*x for x in [0.10,0.10,0.06,0.24,0.20,0.06,0.12,0.12]]
+            story.append(_tbl(_cost_hdr + _cost_rows_pdf,
+                               _cws_cost, fs=7, extras=_cost_extras))
+            story.append(Spacer(1, 0.3*cm))
+
+            # ── Cost by machine bar chart ──────────────────────────────────────
+            _by_mac = (
+                _cd.groupby(COL_MACHINE)["Total Part Cost"]
+                .sum().reset_index()
+                .sort_values("Total Part Cost", ascending=False)
+            )
+            if len(_by_mac) >= 1:
+                story.append(Paragraph("── Cost by Machine", S_SSEC))
+                story.append(hr(color=C_NAVY, thick=0.8))
+                _fbar = go.Figure(go.Bar(
+                    x=_by_mac[COL_MACHINE],
+                    y=_by_mac["Total Part Cost"],
+                    marker=dict(
+                        color=["#E8650A" if i==0 else "#1B2A4A"
+                               for i in range(len(_by_mac))],
+                        line=dict(width=0)),
+                    text=[f"€{v:,.2f}" for v in _by_mac["Total Part Cost"]],
+                    textposition="outside",
+                    hoverinfo="skip",
+                ))
+                _fbar.update_layout(
+                    height=260, width=720, showlegend=False,
+                    paper_bgcolor="white", plot_bgcolor="#FAFAFA",
+                    margin=dict(l=44, r=16, t=16, b=44),
+                    xaxis=dict(tickfont=dict(size=10), gridcolor="#F0E8E0"),
+                    yaxis=dict(title="Cost (€)", gridcolor="#F0E8E0",
+                               tickprefix="€", tickfont=dict(size=9)),
+                )
+                insert_fig(_fbar,
+                    "Spare parts expenditure by machine",
+                    w_px=720, h_px=260)
+
+            # ── Grand total row ───────────────────────────────────────────────
+            story.append(Spacer(1, 0.2*cm))
+            _tot_t = Table([[
+                Paragraph("TOTAL SPARE PARTS EXPENDITURE",
+                          ps("totp", fontSize=11, fontName="Helvetica-Bold",
+                             textColor=C_WH)),
+                Paragraph(f"€ {_total_spend:,.2f}",
+                          ps("totv", fontSize=14, fontName="Helvetica-Bold",
+                             textColor=C_WH, alignment=2)),
+            ]], colWidths=[IW * 0.65, IW * 0.35])
+            _tot_t.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0),(-1,-1), C_OR),
+                ("TOPPADDING",    (0,0),(-1,-1), 12),
+                ("BOTTOMPADDING", (0,0),(-1,-1), 12),
+                ("LEFTPADDING",   (0,0),(-1,-1), 16),
+                ("RIGHTPADDING",  (0,0),(-1,-1), 16),
+                ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+            ]))
+            story.append(_tot_t)
+
+        else:
+            story.append(Paragraph(
+                "No spare parts costs recorded for this period. "
+                "Fill in Qty and Unit Price in the Stops Qualification tab "
+                "and click Save Changes to record costs.",
+                S_BODY))
+
+        # ══════════════════════════════════════════════════════════════════════
         #  FOOTER + BUILD
         # ══════════════════════════════════════════════════════════════════════
 
@@ -2347,11 +2553,13 @@ with tab_qual:
     # ─────────────────────────────────────────────────────────────────────────
     def _is_qualified(r):
         return any(str(r.get(c, "")).strip() not in ("", "None", "nan")
-                   for c in ["Shift", "Key Failure"])
+                   for c in ["Shift", "Key Failure",
+                              "Issue Description", "Action Taken", "Spare Part Ref"])
 
     # Compteurs globaux (calculés sur df filtré sidebar)
-    _qual_n = int(df[["Shift","Key Failure"]].apply(_is_qualified, axis=1).sum()) \
-        if all(c in df.columns for c in ["Shift","Key Failure"]) else 0
+    _check_cols = [c for c in ["Shift","Key Failure"] if c in df.columns]
+    _qual_n = int(df[_check_cols].apply(_is_qualified, axis=1).sum()) \
+        if _check_cols else 0
     _stop_n = int((df["mttr_h"] > 0).sum())
     _pct_q  = (_qual_n / _stop_n * 100) if _stop_n > 0 else 0
 
@@ -2439,10 +2647,13 @@ with tab_qual:
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Construction du df filtré ─────────────────────────────────────────────
-    # Ordre colonnes : Hydra read-only | User ID | Shift | Key Failure
+    # Ordre colonnes : Hydra read-only | qualification | cost fields
     _display_cols = [c for c in [
-        COL_MACHINE, COL_DATE, COL_STATUS, "mttr_h",  # ← lecture seule
-        "User ID", "Shift", "Key Failure"             # ← éditables dans cet ordre
+        COL_MACHINE, COL_DATE, COL_STATUS, "mttr_h",   # read-only Hydra
+        "User ID", "Shift", "Key Failure",              # identity + root cause
+        "Issue Description", "Action Taken",            # free text
+        "Spare Part Ref", "Qty", "Unit Price (€)",      # cost inputs
+        "Total Part Cost",                              # calculated (read-only)
     ] if c in df.columns]
 
     _df_base = _df_stops.copy()   # index = index original de df / session_state
@@ -2483,15 +2694,22 @@ with tab_qual:
     if _df_show.empty:
         st.info("No stops match the selected filters.")
     else:
+        # ── Live recalc Total Part Cost before display ────────────────────────
+        if "Qty" in _df_show.columns and "Unit Price (€)" in _df_show.columns:
+            _df_show["Total Part Cost"] = (
+                pd.to_numeric(_df_show["Qty"], errors="coerce").fillna(0) *
+                pd.to_numeric(_df_show["Unit Price (€)"], errors="coerce").fillna(0.0)
+            ).round(2)
+
         # ── Tableau éditable ──────────────────────────────────────────────────
         _edited = st.data_editor(
             _df_show,
             use_container_width=True,
-            height=min(600, max(200, _n_shown * 38 + 62)),
+            height=min(700, max(250, _n_shown * 42 + 62)),
             num_rows="fixed",
-            column_order=_display_cols,    # ordre explicite forcé
+            column_order=_display_cols,
             column_config={
-                # ── Lecture seule — données Hydra ──────────────────────────
+                # ── Read-only — Hydra data ──────────────────────────────────
                 COL_MACHINE: st.column_config.TextColumn(
                     "🏭 Machine", disabled=True, width="small"),
                 COL_DATE: st.column_config.TextColumn(
@@ -2501,24 +2719,80 @@ with tab_qual:
                 "mttr_h": st.column_config.NumberColumn(
                     "⏱ MTTR (h)", format="%.4f",
                     disabled=True, width="small"),
-                # ── Éditables : ordre 1→2→3 ────────────────────────────────
+                # ── Editable — Identity ─────────────────────────────────────
                 "User ID": st.column_config.TextColumn(
-                    "👤 User ID",
-                    disabled=False, width="small", max_chars=20,
+                    "👤 User ID", disabled=False, width="small",
+                    max_chars=20,
                     help="Your technician badge / employee ID"),
                 "Shift": st.column_config.SelectboxColumn(
-                    "🔄 Shift",
-                    options=SHIFTS, required=False, width="small",
+                    "🔄 Shift", options=SHIFTS,
+                    required=False, width="small",
                     help="A (6-14h) · B (14-22h) · C (22-6h)"),
                 "Key Failure": st.column_config.SelectboxColumn(
-                    "🔧 Key Failure",
-                    options=KEY_FAILURES, required=False, width="large",
+                    "🔧 Key Failure", options=KEY_FAILURES,
+                    required=False, width="large",
                     help="Root cause of the stop"),
+                # ── Editable — Free text ────────────────────────────────────
+                "Issue Description": st.column_config.TextColumn(
+                    "📝 Issue Description", disabled=False, width="large",
+                    max_chars=300,
+                    help="Describe the problem observed"),
+                "Action Taken": st.column_config.TextColumn(
+                    "🔨 Action Taken", disabled=False, width="large",
+                    max_chars=300,
+                    help="What was done to repair the machine"),
+                # ── Editable — Cost inputs ──────────────────────────────────
+                "Spare Part Ref": st.column_config.TextColumn(
+                    "🔩 Spare Part / Ref", disabled=False, width="medium",
+                    max_chars=100,
+                    help="Part name or reference number used"),
+                "Qty": st.column_config.NumberColumn(
+                    "🔢 Qty", disabled=False, width="small",
+                    min_value=0, step=1, default=0,
+                    help="Quantity of spare parts used"),
+                "Unit Price (€)": st.column_config.NumberColumn(
+                    "💶 Unit Price (€)", disabled=False, width="small",
+                    min_value=0.0, step=0.01, format="%.2f", default=0.0,
+                    help="Unit price of the spare part in €"),
+                # ── Read-only — Calculated ──────────────────────────────────
+                "Total Part Cost": st.column_config.NumberColumn(
+                    "💰 Total Cost (€)", disabled=True, width="small",
+                    format="%.2f",
+                    help="Qty × Unit Price (auto-calculated on Save)"),
             },
-            key="qual_editor_v5"
+            key="qual_editor_v6"
         )
 
-        # ── Bouton 💾 Enregistrer (centré, pleine largeur centrale) ──────────
+        # ── Live cost preview below table ─────────────────────────────────────
+        if _edited is not None and "Qty" in _edited.columns and "Unit Price (€)" in _edited.columns:
+            _live_cost = float(
+                (pd.to_numeric(_edited["Qty"], errors="coerce").fillna(0) *
+                 pd.to_numeric(_edited["Unit Price (€)"], errors="coerce").fillna(0.0)
+                ).sum())
+            if _live_cost > 0:
+                st.markdown(f"""
+                <div style="background:linear-gradient(90deg,#0d1f0d,#1a3a1a);
+                            border:1.5px solid #27AE60;border-radius:8px;
+                            padding:10px 18px;margin:6px 0;
+                            display:flex;align-items:center;gap:12px">
+                  <span style="font-size:20px">💰</span>
+                  <div>
+                    <span style="font-family:'Barlow Condensed',sans-serif;
+                                 font-size:10px;color:rgba(255,255,255,0.5);
+                                 letter-spacing:2px;text-transform:uppercase">
+                      Current view · Spare Parts Cost
+                    </span><br>
+                    <span style="font-family:'Barlow Condensed',sans-serif;
+                                 font-size:22px;font-weight:800;color:#27AE60">
+                      € {_live_cost:,.2f}
+                    </span>
+                    <span style="font-size:10px;color:rgba(255,255,255,0.4);margin-left:8px">
+                      (click 💾 Save to update global KPI)
+                    </span>
+                  </div>
+                </div>""", unsafe_allow_html=True)
+
+        # ── Bouton 💾 Save Changes ────────────────────────────────────────────
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
         _sb_left, _sb_mid, _sb_right = st.columns([1.5, 2, 1.5])
         with _sb_mid:
@@ -2551,12 +2825,22 @@ with tab_qual:
                          "_month_lbl", "_week_lbl", "_week_year"}
 
             # ── Nettoyage colonnes qualification ─────────────────────────────
-            for _c in ["User ID", "Shift", "Key Failure"]:
+            for _c in ["User ID", "Shift", "Key Failure",
+                       "Issue Description", "Action Taken", "Spare Part Ref"]:
                 if _c in _src.columns:
                     _src[_c] = (_src[_c].fillna("")
                                         .astype(str)
                                         .str.strip()
                                         .replace({"nan": "", "None": ""}))
+            for _c in ["Qty", "Unit Price (€)", "Total Part Cost"]:
+                if _c in _src.columns:
+                    _src[_c] = pd.to_numeric(_src[_c], errors="coerce").fillna(0)
+
+            # Recalculate Total Part Cost cleanly
+            if "Qty" in _src.columns and "Unit Price (€)" in _src.columns:
+                _src["Total Part Cost"] = (
+                    _src["Qty"] * _src["Unit Price (€)"]
+                ).round(2)
 
             # ── Colonne MTTR lisible (en heures, arrondie) ────────────────────
             if "mttr_h" in _src.columns:
@@ -2573,11 +2857,17 @@ with tab_qual:
             _hydra_base = [c for c in _src.columns
                            if c not in _INTERNAL
                            and c not in ["User ID", "Shift", "Key Failure",
+                                         "Issue Description", "Action Taken",
+                                         "Spare Part Ref", "Qty",
+                                         "Unit Price (€)", "Total Part Cost",
                                          "MTTR (h)", "MTBF (h)"]]
             _metric_cols = [c for c in ["MTTR (h)", "MTBF (h)"]
                             if c in _src.columns]
-            _qual_cols   = [c for c in ["User ID", "Shift", "Key Failure"]
-                            if c in _src.columns]
+            _qual_cols   = [c for c in [
+                "User ID", "Shift", "Key Failure",
+                "Issue Description", "Action Taken",
+                "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
+            ] if c in _src.columns]
             _all_cols    = _hydra_base + _metric_cols + _qual_cols
 
             # ── Helper style ──────────────────────────────────────────────────
@@ -2643,10 +2933,12 @@ with tab_qual:
 
                 _stops_cols = [c for c in [
                     COL_MACHINE, COL_DATE, COL_STATUS,
-                    "MTTR (h)", "User ID", "Shift", "Key Failure"
+                    "MTTR (h)", "User ID", "Shift", "Key Failure",
+                    "Issue Description", "Action Taken",
+                    "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
                 ] if c in _stops.columns]
 
-                # Marquer les lignes non qualifiées
+                # Mark qualified rows
                 def _mark_qual(r):
                     return (str(r.get("Shift","")).strip() not in
                             ("","nan","None") or
@@ -2662,6 +2954,39 @@ with tab_qual:
                 _style_sheet(_writer.sheets["Stops"],
                               _stops[_stops2_cols],
                               header_color="E8650A")
+
+                # ── SHEET 3: Cost Summary ──────────────────────────────────
+                _cost_rows = _stops[
+                    pd.to_numeric(_stops.get("Total Part Cost", pd.Series([0])),
+                                  errors="coerce").fillna(0) > 0
+                ].copy() if "Total Part Cost" in _stops.columns else pd.DataFrame()
+
+                if not _cost_rows.empty:
+                    _cost_cols = [c for c in [
+                        COL_MACHINE, COL_DATE, "User ID", "Key Failure",
+                        "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
+                    ] if c in _cost_rows.columns]
+                    _cost_df = _cost_rows[_cost_cols].copy()
+
+                    # Add total row
+                    _total_row = {c: "" for c in _cost_cols}
+                    _total_row["Spare Part Ref"] = "TOTAL"
+                    _total_row["Total Part Cost"] = _cost_df["Total Part Cost"].sum().round(2)
+                    _cost_df = pd.concat(
+                        [_cost_df, pd.DataFrame([_total_row])],
+                        ignore_index=True)
+
+                    _cost_df.to_excel(_writer, sheet_name="Cost Summary", index=False)
+                    _ws_cost = _writer.sheets["Cost Summary"]
+                    _style_sheet(_ws_cost, _cost_df, header_color="1B2A4A")
+
+                    # Highlight Total row in orange
+                    from openpyxl.styles import Font, PatternFill
+                    _last = _ws_cost.max_row
+                    for _cell in _ws_cost[_last]:
+                        _cell.fill = PatternFill("solid", fgColor="E8650A")
+                        _cell.font = Font(bold=True, color="FFFFFF",
+                                          name="Calibri", size=10)
 
             _buf.seek(0)
             return _buf.read()
@@ -2687,7 +3012,12 @@ with tab_qual:
         # ── Persistance : uniquement au clic Enregistrer ─────────────────────
         if _save_clicked and _edited is not None:
             _n_saved = 0
-            for _col in ["User ID", "Shift", "Key Failure"]:
+            _ALL_SAVE_COLS = [
+                "User ID", "Shift", "Key Failure",
+                "Issue Description", "Action Taken", "Spare Part Ref",
+                "Qty", "Unit Price (€)",
+            ]
+            for _col in _ALL_SAVE_COLS:
                 if _col not in _edited.columns:
                     continue
                 _new_vals = _edited[_col].values
@@ -2703,9 +3033,17 @@ with tab_qual:
                             _n_saved += 1
                 except Exception:
                     st.session_state.edited_df.loc[_orig_idx, _col] = _new_vals
-                    _n_saved += int(_diff.sum()) if '_diff' in dir() else len(_orig_idx)
+                    _n_saved += len(_orig_idx)
 
-            # Stocker le résultat pour affichage après rerun
+            # Recalculate Total Part Cost globally after save
+            _edf2 = st.session_state.edited_df
+            _edf2["Total Part Cost"] = (
+                pd.to_numeric(_edf2["Qty"], errors="coerce").fillna(0) *
+                pd.to_numeric(_edf2["Unit Price (€)"], errors="coerce").fillna(0.0)
+            ).round(2)
+            st.session_state.edited_df = _edf2
+
+            # Store result for display after rerun
             st.session_state["_save_result"] = _n_saved
             st.rerun()
 
@@ -2728,8 +3066,8 @@ with tab_qual:
                       Changes saved
                     </div>
                     <div style="font-size:12px;color:#145a32;line-height:1.6">
-                      <strong>{_nr}</strong> cellule{"s" if _nr != 1 else ""}
-                      cell{"s" if _nr != 1 else ""} modified and saved to session.
+                      <strong>{_nr}</strong> field{"s" if _nr != 1 else ""}
+                      modified and saved to session.
                       Data is ready for PDF and CSV export.
                     </div>
                   </div>
@@ -2756,8 +3094,15 @@ with tab_qual:
         _q_all = df[df[["Shift","Key Failure"]].apply(_is_qualified, axis=1)]
         _ts    = datetime.now().strftime("%Y%m%d_%H%M")
 
-        # Métriques rapides
-        _qm1, _qm2, _qm3 = st.columns(3)
+        # Compute total maintenance cost from session_state
+        _cost_total_q = 0.0
+        if st.session_state.edited_df is not None and "Total Part Cost" in st.session_state.edited_df.columns:
+            _cost_total_q = float(
+                pd.to_numeric(st.session_state.edited_df["Total Part Cost"],
+                              errors="coerce").fillna(0).sum())
+
+        # Quick metrics — 4 cols
+        _qm1, _qm2, _qm3, _qm4 = st.columns(4)
         with _qm1:
             st.metric("✅ Qualified Stops", f"{_qual_n} / {_stop_n}",
                       delta=f"{_pct_q:.0f}% of total")
@@ -2774,13 +3119,19 @@ with tab_qual:
                           .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
                           .notna()).sum())
             st.metric("🔧 Key Failure filled", f"{_kf_n} rows")
+        with _qm4:
+            st.metric("💰 Spare Parts Cost",
+                      f"€ {_cost_total_q:,.2f}",
+                      delta="recorded" if _cost_total_q > 0 else "no costs yet")
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-        # Export CSV arrêts qualifiés uniquement
+        # Export CSV — all columns including cost
         _q_exp_cols = [c for c in [
             COL_MACHINE, COL_DATE, COL_STATUS,
-            "mttr_h", "User ID", "Shift", "Key Failure"
+            "mttr_h", "User ID", "Shift", "Key Failure",
+            "Issue Description", "Action Taken",
+            "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
         ] if c in _q_all.columns]
 
         _ec1, _ec2 = st.columns(2)
