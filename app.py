@@ -564,7 +564,7 @@ def check_missing(df: pd.DataFrame) -> list[str]:
 
 
 def fmt(val, decimals=2):
-    """Formate un nombre pour affichage carte KPI."""
+    """Format a number for KPI card display."""
     if pd.isna(val): return "—"
     if val >= 1_000_000: return f"{val/1_000_000:.{decimals}f}M"
     if val >= 1000:      return f"{val/1000:.{decimals}f}k"
@@ -584,7 +584,7 @@ def dl_png(fig, filename, label="⬇ Download PNG"):
                            file_name=filename, mime="image/png",
                            use_container_width=True)
     except Exception:
-        st.caption("_`pip install kaleido` pour activer l'export PNG_")
+        st.caption("_`pip install kaleido` to enable PNG export_")
 
 
 def export_excel(df: pd.DataFrame, kpi: dict) -> bytes:
@@ -804,14 +804,21 @@ if missing:
     )
     st.stop()
 
-# ── Ajouter colonnes qualification si absentes ──
-for col, default in [("Shift", ""), ("Key Failure", ""), ("User ID", "")]:
+# ── Add qualification columns if absent — User ID pre-filled with "TE" prefix ──
+for col, default in [("Shift", ""), ("Key Failure", ""), ("User ID", "TE")]:
     if col not in df_raw.columns:
         df_raw[col] = default
 
 # ── Initialiser session_state.edited_df ──
 if st.session_state.edited_df is None:
     st.session_state.edited_df = df_raw.copy()
+
+# ── Ensure existing blank User IDs get "TE" prefix ──
+_edf = st.session_state.edited_df
+if "User ID" in _edf.columns:
+    _blank_uid = _edf["User ID"].astype(str).str.strip().isin(["", "nan", "None"])
+    _edf.loc[_blank_uid, "User ID"] = "TE"
+    st.session_state.edited_df = _edf
 
 # ── Utiliser la version éditée (préserve les qualifications utilisateur) ──
 df_raw = st.session_state.edited_df.copy()
@@ -1042,8 +1049,8 @@ if not has_mtbf:
 #  NAVIGATION — TABS (exclusif)
 # ─────────────────────────────────────────────────────────────────────────────
 tab_kpi, tab_qual = st.tabs([
-    "📊  Analyse des Performances (KPIs)",
-    "📝  Qualification des Arrêts",
+    "📊  Performance Analysis (KPIs)",
+    "📝  Stops Qualification",
 ])
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1096,7 +1103,7 @@ with tab_kpi:
     # ═══════════════════════════════════════════════════════════════════════════
     #  SECTION — ÉVOLUTION DES PERFORMANCES (hebdo + mensuel)
     # ═══════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="te-section">📈 Évolution des Performances</div>',
+    st.markdown('<div class="te-section">📈 Performance Trend</div>',
                 unsafe_allow_html=True)
 
     # ── Extraction des time features ──────────────────────────────────────────
@@ -1119,7 +1126,7 @@ with tab_kpi:
 
         # ── Agrégat générique — trié par clé numérique ────────────────────────
         def _te_agg(lbl_col, sort_key):
-            """Agrège par période, trie par clé numérique, retourne df propre."""
+            """Aggregate by period, sort by numeric key, return clean df."""
             agg = _df_t.groupby(lbl_col, as_index=False).agg(
                 _sort_key =(sort_key,  "first"),   # valeur numérique pour tri
                 mttr_sum  =("mttr_h",  "sum"),
@@ -1216,7 +1223,7 @@ with tab_kpi:
         def _te_recap_table(df_agg, periode_col):
             _tbl = df_agg.rename(columns={
                 "label":"label_raw","mttr_h":"MTTR (h)","mtbf_h":"MTBF (h)",
-                "dispo":"Disponibilité (%)","nb_stops":"Arrêts","nb_events":"Events"})
+                "dispo":"Availability (%)", "nb_stops":"Stops", "nb_events":"Events"})
             _tbl.insert(0, periode_col, _tbl.pop("label_raw"))
             def _sd(val):
                 try:
@@ -1227,68 +1234,70 @@ with tab_kpi:
                 except: return ""
             st.dataframe(
                 _tbl.style
-                    .applymap(_sd, subset=["Disponibilité (%)"])
-                    .format({"Disponibilité (%)":"{:.2f}%",
+                    .applymap(_sd, subset=["Availability (%)"])
+                    .format({"Availability (%)":"{:.2f}%",
                              "MTTR (h)":"{:.4f}","MTBF (h)":"{:.3f}"}),
                 use_container_width=True, hide_index=True,
                 height=min(420, len(_tbl) * 36 + 42))
 
         # ── Sélecteur de graphique ─────────────────────────────────────────────
         _chart_choice = st.radio(
-            "🔍 Choisir le graphique à visualiser :",
-            options=["Disponibilité (%)", "MTTR (h)", "MTBF (h)"],
+            "🔍 Select chart to display:",
+            options=["Availability (%)", "MTTR (h)", "MTBF (h)"],
             index=0, horizontal=True, key="te_chart_pick")
 
         # ── Rendu du graphique sélectionné (pleine largeur) ───────────────────
-        def _te_render_charts(df_v, suffix, is_mtbf):
-            """Affiche 1 graphique sélectionné pleine largeur + tableau récap."""
+        def _te_render_charts(df_v, suffix, is_mtbf, chart_key="Availability (%)"):
+            """Display selected chart full-width + summary table."""
             x = df_v["label"].tolist()
 
             _specs = {
-                "Disponibilité (%)": (
+                "Availability (%)": (
                     df_v["dispo"].tolist(),
-                    "Disponibilité (%)", "Dispo (%)", TE_GREEN, 95, ".1f"),
+                    "Availability (%)", "Avail. (%)", TE_GREEN, 95, ".1f"),
                 "MTBF (h)": (
                     df_v["mtbf_h"].tolist() if is_mtbf else [0]*len(df_v),
-                    "MTBF (h) — Fiabilité", "MTBF (h)", TE_NAVY, None, None),
+                    "MTBF (h) — Reliability", "MTBF (h)", TE_NAVY, None, None),
                 "MTTR (h)": (
                     df_v["mttr_h"].tolist(),
-                    "MTTR (h) — Réparabilité", "MTTR (h)", TE_ORANGE, None, None),
+                    "MTTR (h) — Repairability", "MTTR (h)", TE_ORANGE, None, None),
             }
-            _y, _ttl, _yt, _clr, _tgt, _fmt = _specs[_chart_choice]
+            # Fallback if key not found (e.g. stale session state)
+            _sel = chart_key if chart_key in _specs else "Availability (%)"
+            _y, _ttl, _yt, _clr, _tgt, _fmt = _specs[_sel]
 
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             st.plotly_chart(
                 _te_line(x, _y, _ttl, _yt, _clr,
                          target=_tgt, y_fmt=_fmt, height=460),
                 use_container_width=True, config=PCONF)
-            if _chart_choice == "MTBF (h)" and not is_mtbf:
-                st.caption("⚠ Colonne MTBF absente du fichier Hydra.")
+            if _sel == "MTBF (h)" and not is_mtbf:
+                st.caption("⚠ MTBF column absent from Hydra file.")
             st.markdown("</div>", unsafe_allow_html=True)
 
         # ── Sub-tabs ──────────────────────────────────────────────────────────
-        _stab_w, _stab_m = st.tabs(["📆  Vue Hebdomadaire", "📅  Vue Mensuelle"])
+        _stab_w, _stab_m = st.tabs(["📆  Weekly View", "📅  Monthly View"])
 
         # ─── VUE HEBDOMADAIRE ─────────────────────────────────────────────────
         with _stab_w:
             if len(_df_week) < 2:
-                st.info("Pas assez de données hebdomadaires (minimum 2 semaines requises).")
+                st.info("Not enough weekly data (minimum 2 weeks required).")
             else:
-                _te_render_charts(_df_week, "w", has_mtbf)
-                _te_mini_label("Récapitulatif hebdomadaire")
-                _te_recap_table(_df_week, "Semaine")
+                _te_render_charts(_df_week, "w", has_mtbf, _chart_choice)
+                _te_mini_label("Weekly Summary")
+                _te_recap_table(_df_week, "Week")
 
         # ─── VUE MENSUELLE ────────────────────────────────────────────────────
         with _stab_m:
             if len(_df_month) < 2:
-                st.info("Pas assez de données mensuelles (minimum 2 mois requis).")
+                st.info("Not enough monthly data (minimum 2 months required).")
             else:
-                _te_render_charts(_df_month, "m", has_mtbf)
-                _te_mini_label("Récapitulatif mensuel")
-                _te_recap_table(_df_month, "Mois")
+                _te_render_charts(_df_month, "m", has_mtbf, _chart_choice)
+                _te_mini_label("Monthly Summary")
+                _te_recap_table(_df_month, "Month")
 
     else:
-        st.info("⚠ Colonne `plant_shift_date` absente — évolution temporelle indisponible.")
+        st.info("⚠ Column `plant_shift_date` absent — time trend unavailable.")
 
     # ── Pareto + Pie ───────────────────────────────────────────────────────────
     st.markdown('<div class="te-section">Pareto & Cause Analysis</div>', unsafe_allow_html=True)
@@ -1704,7 +1713,7 @@ with tab_kpi:
                     story.append(Paragraph(caption, S_CAP))
             else:
                 story.append(Paragraph(
-                    f"⚠ Graphique indisponible ({caption}) — "
+                    f"⚠ Chart unavailable ({caption}) — "
                     "pip install kaleido", S_CAP))
             story.append(Spacer(1, 0.2*cm))
 
@@ -1766,7 +1775,7 @@ with tab_kpi:
 
         def _make_trend_fig(df_v, col, title, color_hex,
                              target=None, h_px=280):
-            """Crée une figure Plotly d'évolution pour le PDF."""
+            """Create a Plotly trend figure for the PDF."""
             x  = df_v["label"].tolist()
             y  = df_v[col].tolist()
             fig = go.Figure()
@@ -1805,9 +1814,9 @@ with tab_kpi:
             return fig
 
         def _recap_pdf_table(df_v, periode_lbl):
-            """Tableau récap hebdo/mensuel pour le PDF."""
+            """Weekly/monthly summary table for the PDF."""
             hdr = [[periode_lbl, "MTTR (h)", "MTBF (h)",
-                    "Disponibilité (%)", "Arrêts", "Events"]]
+                    "Availability (%)", "Stops", "Events"]]
             rows = []
             extras = []
             for ri, row in df_v.iterrows():
@@ -1879,7 +1888,7 @@ with tab_kpi:
 
         story.append(_cover_row(
             Paragraph(
-                f"RAPPORT GÉNÉRÉ LE &nbsp;"
+                f"REPORT GENERATED: &nbsp;"
                 f"{datetime.now().strftime('%d/%m/%Y  à  %H:%M')}",
                 S_DATE),
             C_NAVY, pad_top=2, pad_bot=18))
@@ -1889,20 +1898,20 @@ with tab_kpi:
         # Tableau KPI récap — alternance orange/crème sur colonne label
         _kpi_data = [
             ["INDICATEUR", "VALEUR"],
-            ["Disponibilité Globale",
+            ["Global Availability",
              f"{kpi_d['dispo']:.2f} %"],
-            ["MTTR Moyen / Arrêt",
+            ["Avg MTTR / Stop",
              f"{kpi_d['mttr_mean_h']:.4f} h  "
              f"({round(kpi_d['mttr_mean_h']*60,1)} min)"],
-            ["MTBF Moyen",
+            ["Avg MTBF",
              f"{kpi_d['mtbf_mean_h']:.2f} h"],
-            ["Nombre Total d'Arrêts",
+            ["Total Stops",
              str(kpi_d['nb_arrets'])],
-            ["MTTR Cumulatif",
+            ["Cumulative MTTR",
              f"{kpi_d['mttr_total_h']:.2f} h"],
-            ["MTBF Cumulatif",
+            ["Cumulative MTBF",
              f"{kpi_d['mtbf_total_h']:.2f} h"],
-            ["Total Événements Analysés",
+            ["Total Events Analyzed",
              f"{kpi_d['nb_rows']:,}"],
         ]
         _cover_extras = []
@@ -1920,7 +1929,7 @@ with tab_kpi:
         section("── KPIs PRINCIPAUX")
         _kw = IW / 4
         _kpi_card = Table([
-            ["Disponibilité",        "Arrêts",
+            ["Availability",        "Stops",
              "MTTR Moy.",            "MTBF Moy."],
             [f"{kpi_d['dispo']:.2f} %",
              str(kpi_d['nb_arrets']),
@@ -1980,7 +1989,7 @@ with tab_kpi:
                 yaxis2=dict(title="Cumul (%)", range=[0,115],
                              ticksuffix="%", tickfont=dict(size=9)))
             insert_fig(_fp,
-                "Pareto Downtime — barres = MTTR cumulé · courbe rouge = % cumulé",
+                "Downtime Pareto — bars = cumulative MTTR · red curve = cumulative %",
                 w_px=720, h_px=290)
 
         # Pie
@@ -2003,7 +2012,7 @@ with tab_kpi:
             annotations=[dict(text=f"<b>{len(df_in):,}</b><br>events",
                                x=0.5, y=0.5, showarrow=False,
                                font=dict(size=13, color="#1B2A4A"))])
-        insert_fig(_fpi, "Répartition des statuts machine",
+        insert_fig(_fpi, "Machine status breakdown",
                     w_px=720, h_px=300)
         story.append(PageBreak())
 
@@ -2063,7 +2072,7 @@ with tab_kpi:
             "Matrice de Criticité — Bas-droite = priorité TPM absolue",
             w_px=720,h_px=340)
 
-        section("── ÉVOLUTION DE LA DISPONIBILITÉ QUOTIDIENNE")
+        section("── DAILY AVAILABILITY TREND")
         if "date_only" in df_in.columns:
             _da = df_in.groupby("date_only").agg(
                 mt=("mttr_h","sum"),mb=("mtbf_h","sum")).reset_index()
@@ -2105,7 +2114,7 @@ with tab_kpi:
                            tickfont=dict(size=9),zeroline=False,tickangle=-35),
                 legend=dict(orientation="h",x=0,y=-0.25,font=dict(size=8)))
             insert_fig(_fevo,
-                "Disponibilité quotidienne · pointillé navy = global · rouge = cible 95%",
+                "Daily availability per machine · navy dotted = global · red = 95% target",
                 w_px=720,h_px=290)
         story.append(PageBreak())
 
@@ -2120,30 +2129,30 @@ with tab_kpi:
 
         _df_w, _df_m = _pdf_te_agg(df_in)
 
-        # ─ Choisir la vue la plus riche (hebdo si ≥2 semaines, sinon mensuel) ─
+        # ─ Use richest view (weekly if ≥2 weeks, else monthly) ─
         _has_week  = not _df_w.empty and len(_df_w) >= 2
         _has_month = not _df_m.empty and len(_df_m) >= 2
 
         for _view_lbl, _df_v, _has_v, _periode_col in [
-            ("Vue Hebdomadaire", _df_w, _has_week,  "Semaine"),
-            ("Vue Mensuelle",    _df_m, _has_month, "Mois"),
+            ("Weekly View", _df_w, _has_week,  "Week"),
+            ("Monthly View",    _df_m, _has_month, "Month"),
         ]:
             if not _has_v:
                 story.append(Paragraph(
-                    f"⚠ {_view_lbl} — données insuffisantes "
-                    f"(minimum 2 périodes requises).", S_CAP))
+                    f"⚠ {_view_lbl} — insufficient data "
+                    f"(minimum 2 periods required).", S_CAP))
                 continue
 
             story.append(Paragraph(_view_lbl, S_SSEC))
             story.append(hr(color=C_NAVY, thick=0.8))
 
-            # ── Graphique 1 : Disponibilité ────────────────────────────────
+            # ── Chart 1: Availability ───────────────────────────────────────
             insert_fig(
                 _make_trend_fig(_df_v, "dispo",
-                                f"Disponibilité (%) — {_view_lbl}",
+                                f"Availability (%) — {_view_lbl}",
                                 "#27AE60", target=95, h_px=250),
-                f"Disponibilité {_view_lbl.lower()} · "
-                "Ligne rouge pointillée = cible 95%",
+                f"Availability {_view_lbl.lower()} · "
+                "Red dotted line = 95% target",
                 w_px=720, h_px=250)
 
             # ── Graphique 2 : MTTR ─────────────────────────────────────────
@@ -2151,8 +2160,8 @@ with tab_kpi:
                 _make_trend_fig(_df_v, "mttr_h",
                                 f"MTTR total (h) — {_view_lbl}",
                                 "#E8650A", h_px=230),
-                f"MTTR cumulé {_view_lbl.lower()} · "
-                "Plus bas = meilleures réparations",
+                f"Cumulative MTTR {_view_lbl.lower()} · "
+                "Lower = better repairs",
                 w_px=720, h_px=230)
 
             # ── Graphique 3 : MTBF ─────────────────────────────────────────
@@ -2161,14 +2170,14 @@ with tab_kpi:
                     _make_trend_fig(_df_v, "mtbf_h",
                                     f"MTBF total (h) — {_view_lbl}",
                                     "#1B2A4A", h_px=230),
-                    f"MTBF cumulé {_view_lbl.lower()} · "
-                    "Plus haut = meilleure fiabilité",
+                    f"Cumulative MTBF {_view_lbl.lower()} · "
+                    "Higher = better reliability",
                     w_px=720, h_px=230)
 
-            # ── Tableau récap ──────────────────────────────────────────────
+            # ── Summary table ───────────────────────────────────────────────
             story.append(Spacer(1, 0.2*cm))
             story.append(Paragraph(
-                f"Tableau récapitulatif — {_view_lbl}", S_SSEC))
+                f"Summary Table — {_view_lbl}", S_SSEC))
             story.append(_recap_pdf_table(_df_v, _periode_col))
             story.append(Spacer(1, 0.4*cm))
 
@@ -2180,7 +2189,7 @@ with tab_kpi:
 
         section("── SUMMARY TABLE BY MACHINE")
         _hd_ma = [["Machine","MTTR Total (h)","MTBF Total (h)",
-                   "Événements","Disponibilité (%)"]]
+                   "Events","Availability (%)"]]
         _rows_ma = []
         _ext_ma  = []
         for _ri, _row in ma_table.iterrows():
@@ -2225,7 +2234,7 @@ with tab_kpi:
         #  PAGE 6 — DONNÉES QUALIFIÉES
         # ══════════════════════════════════════════════════════════════════════
 
-        section("── DONNÉES QUALIFIÉES — SAISIE TECHNICIEN")
+        section("── QUALIFIED STOPS — TECHNICIAN INPUT")
 
         if all(c in df_in.columns for c in ["Shift","Key Failure"]):
             def _nb(v): return str(v).strip() not in ("","None","nan")
@@ -2258,7 +2267,7 @@ with tab_kpi:
                             _rv.append(_s[:34]+"…" if len(_s)>35 else _s)
                     _rows_q.append(_rv)
                 story.append(Paragraph(
-                    f"{len(_rows_q)} arrêt(s) qualifié(s) sur la période.",
+                    f"{len(_rows_q)} qualified stop(s) in selected period.",
                     S_BODY))
                 story.append(Spacer(1,0.15*cm))
                 story.append(_tbl(_hd_q+_rows_q,
@@ -2266,11 +2275,11 @@ with tab_kpi:
                                    fs=7))
             else:
                 story.append(Paragraph(
-                    "Aucun arrêt qualifié pour la période sélectionnée.",
+                    "No qualified stops for the selected period.",
                     S_BODY))
         else:
             story.append(Paragraph(
-                "Colonnes Shift / Key Failure non disponibles.", S_BODY))
+                "Shift / Key Failure columns not available.", S_BODY))
 
         # ══════════════════════════════════════════════════════════════════════
         #  FOOTER + BUILD
@@ -2327,7 +2336,7 @@ with tab_kpi:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  TAB 2 — QUALIFICATION DES ARRÊTS  (filtres + User ID + persistance robuste)
+#  TAB 2 — STOPS QUALIFICATION  (filters + User ID + robust persistence)
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TAB 2 — QUALIFICATION DES ARRÊTS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2356,14 +2365,14 @@ with tab_qual:
         <div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;
                       color:{TE_ORANGE};letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">
-            ✏️ Qualification des Arrêts
+            ✏️ Stops Qualification
           </div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:10px;
                       color:rgba(255,255,255,0.6);line-height:1.9">
-            Renseignez votre <strong style="color:{TE_ORANGE2}">User ID</strong>,
-            le <strong style="color:{TE_ORANGE2}">Shift</strong>
-            et la <strong style="color:{TE_ORANGE2}">Key Failure</strong>
-            · Cliquez sur <strong style="color:{TE_ORANGE2}">💾 Enregistrer</strong> pour valider
+            Fill in your <strong style="color:{TE_ORANGE2}">User ID</strong>,
+            the <strong style="color:{TE_ORANGE2}">Shift</strong>
+            and the <strong style="color:{TE_ORANGE2}">Key Failure</strong>
+            · Click <strong style="color:{TE_ORANGE2}">💾 Save Changes</strong> to confirm
           </div>
         </div>
         <div style="text-align:right">
@@ -2381,7 +2390,7 @@ with tab_qual:
         <div style="display:flex;justify-content:space-between;font-size:9px;
                     color:rgba(255,255,255,0.4);font-family:'JetBrains Mono',monospace;
                     margin-bottom:5px">
-          <span>Progression de la qualification</span>
+          <span>Qualification progress</span>
           <span style="color:{TE_ORANGE}">{_qual_n} / {_stop_n} ({_pct_q:.0f}%)</span>
         </div>
         <div style="background:rgba(255,255,255,0.1);border-radius:4px;height:7px;overflow:hidden">
@@ -2401,7 +2410,7 @@ with tab_qual:
       <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
                   letter-spacing:2.5px;text-transform:uppercase;
                   color:{TE_ORANGE};margin-bottom:10px">
-        🔍 Recherche Rapide
+        🔍 Quick Search
       </div>
     """, unsafe_allow_html=True)
 
@@ -2409,23 +2418,23 @@ with tab_qual:
     _fcol1, _fcol2 = st.columns(2)
 
     with _fcol1:
-        _machines_avail = ["Toutes"] + sorted(
+        _machines_avail = ["All"] + sorted(
             _df_stops[COL_MACHINE].dropna().unique().tolist())
         _filter_machine = st.selectbox(
             "🏭 Machine ID",
             options=_machines_avail, index=0,
             key="q_filter_machine",
-            help="Filtrer par machine spécifique")
+            help="Filter by specific machine")
 
     with _fcol2:
         _dates_raw    = pd.to_datetime(_df_stops[COL_DATE], errors="coerce").dropna()
         _dates_avail  = sorted(_dates_raw.dt.date.unique())
-        _date_options = ["Toutes"] + [d.strftime("%m/%d/%Y") for d in _dates_avail]
+        _date_options = ["All"] + [d.strftime("%m/%d/%Y") for d in _dates_avail]
         _filter_date_str = st.selectbox(
-            "📅 Date précise",
+            "📅 Exact Date",
             options=_date_options, index=0,
             key="q_filter_date",
-            help="Filtrer par date de shift exacte")
+            help="Filter by exact shift date")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2438,10 +2447,10 @@ with tab_qual:
 
     _df_base = _df_stops.copy()   # index = index original de df / session_state
 
-    if _filter_machine != "Toutes":
+    if _filter_machine != "All":
         _df_base = _df_base[_df_base[COL_MACHINE] == _filter_machine]
 
-    if _filter_date_str != "Toutes":
+    if _filter_date_str != "All":
         _target_date = pd.to_datetime(_filter_date_str, format="%m/%d/%Y", errors="coerce")
         if pd.notna(_target_date):
             _df_base = _df_base[
@@ -2461,18 +2470,18 @@ with tab_qual:
 
     # Compteur de lignes
     _n_shown    = len(_df_show)
-    _is_filtered = _filter_machine != "Toutes" or _filter_date_str != "Toutes"
+    _is_filtered = _filter_machine != "All" or _filter_date_str != "All"
     st.markdown(
         f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;'
         f'color:#9A7A60;margin-bottom:8px;letter-spacing:1px">'
-        f'Affichage : <strong style="color:{TE_ORANGE}">{_n_shown}</strong>'
-        f' arrêt{"s" if _n_shown != 1 else ""}'
-        f'{"  ·  filtre actif / " + str(_stop_n) + " stops totaux" if _is_filtered else "  ·  " + str(_stop_n) + " stops totaux"}'
+        f'Showing: <strong style="color:{TE_ORANGE}">{_n_shown}</strong>'
+        f' stop{"s" if _n_shown != 1 else ""}'
+        f'{"  ·  active filter / " + str(_stop_n) + " total stops" if _is_filtered else "  ·  " + str(_stop_n) + " total stops"}'
         f'</div>',
         unsafe_allow_html=True)
 
     if _df_show.empty:
-        st.info("Aucun arrêt ne correspond aux filtres sélectionnés.")
+        st.info("No stops match the selected filters.")
     else:
         # ── Tableau éditable ──────────────────────────────────────────────────
         _edited = st.data_editor(
@@ -2496,7 +2505,7 @@ with tab_qual:
                 "User ID": st.column_config.TextColumn(
                     "👤 User ID",
                     disabled=False, width="small", max_chars=20,
-                    help="Votre matricule / identifiant technicien"),
+                    help="Your technician badge / employee ID"),
                 "Shift": st.column_config.SelectboxColumn(
                     "🔄 Shift",
                     options=SHIFTS, required=False, width="small",
@@ -2504,7 +2513,7 @@ with tab_qual:
                 "Key Failure": st.column_config.SelectboxColumn(
                     "🔧 Key Failure",
                     options=KEY_FAILURES, required=False, width="large",
-                    help="Cause racine de l'arrêt"),
+                    help="Root cause of the stop"),
             },
             key="qual_editor_v5"
         )
@@ -2514,11 +2523,11 @@ with tab_qual:
         _sb_left, _sb_mid, _sb_right = st.columns([1.5, 2, 1.5])
         with _sb_mid:
             _save_clicked = st.button(
-                "💾  ENREGISTRER LES MODIFICATIONS",
+                "💾  SAVE CHANGES",
                 type="primary",
                 use_container_width=True,
                 key="btn_save_qual",
-                help="Valider et sauvegarder les saisies du tableau ci-dessus")
+                help="Validate and save entries from the table above")
 
         # ── Bouton Export Excel — données complètes session_state ────────────
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
@@ -2527,8 +2536,8 @@ with tab_qual:
         def _build_excel_export():
             """
             Génère un .xlsx complet depuis session_state.edited_df.
-            Feuille 1 : TOUTES les lignes, colonnes Hydra + User ID / Shift / Key Failure.
-            Feuille 2 : Uniquement les arrêts (mttr_h > 0), colonnes lisibles.
+            Sheet 1: ALL rows, Hydra columns + User ID / Shift / Key Failure.
+            Sheet 2: Stops only (mttr_h > 0), readable columns.
             """
             from openpyxl.styles import (Font, PatternFill, Alignment,
                                           Border, Side)
@@ -2574,7 +2583,7 @@ with tab_qual:
             # ── Helper style ──────────────────────────────────────────────────
             def _style_sheet(ws, df_data, header_color="1B2A4A",
                               zebra_color="F7F4F0"):
-                """Applique header foncé + alternance de lignes + bordures."""
+                """Apply dark header, row alternation and borders."""
                 _hdr_font    = Font(bold=True, color="FFFFFF",
                                     name="Calibri", size=10)
                 _hdr_fill    = PatternFill("solid",
@@ -2621,12 +2630,12 @@ with tab_qual:
                 # ── FEUILLE 1 : Données complètes ─────────────────────────────
                 _df_full = _src[_all_cols].copy()
                 _df_full.to_excel(_writer,
-                                   sheet_name="Données Complètes",
+                                   sheet_name="Full Dataset",
                                    index=False)
-                _style_sheet(_writer.sheets["Données Complètes"],
+                _style_sheet(_writer.sheets["Full Dataset"],
                               _df_full, header_color="1B2A4A")
 
-                # ── FEUILLE 2 : Arrêts qualifiés ──────────────────────────────
+                # ── SHEET 2: Qualified Stops ────────────────────────────────────
                 _mask_stops = (_src["mttr_h"] > 0
                                if "mttr_h" in _src.columns
                                else pd.Series(True, index=_src.index))
@@ -2644,13 +2653,13 @@ with tab_qual:
                             str(r.get("Key Failure","")).strip() not in
                             ("","nan","None"))
 
-                _stops["Qualifié"] = _stops[_stops_cols].apply(
-                    _mark_qual, axis=1).map({True: "✅ Oui", False: "⬜ Non"})
-                _stops2_cols = _stops_cols + ["Qualifié"]
+                _stops["Qualified"] = _stops[_stops_cols].apply(
+                    _mark_qual, axis=1).map({True: "✅ Yes", False: "⬜ No"})
+                _stops2_cols = _stops_cols + ["Qualified"]
 
                 _stops[_stops2_cols].to_excel(
-                    _writer, sheet_name="Arrêts (stops)", index=False)
-                _style_sheet(_writer.sheets["Arrêts (stops)"],
+                    _writer, sheet_name="Stops", index=False)
+                _style_sheet(_writer.sheets["Stops"],
                               _stops[_stops2_cols],
                               header_color="E8650A")
 
@@ -2663,17 +2672,17 @@ with tab_qual:
                 _excel_bytes = _build_excel_export()
                 _ts_xl = datetime.now().strftime("%Y%m%d_%H%M")
                 st.download_button(
-                    label="📥  EXPORTER LA DATA QUALIFIÉE (EXCEL)",
+                    label="📥  EXPORT QUALIFIED DATA (EXCEL)",
                     data=_excel_bytes,
                     file_name=f"TE_Qualification_{_ts_xl}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument"
                          ".spreadsheetml.sheet",
                     use_container_width=True,
                     key="btn_export_excel",
-                    help="Télécharge toutes les données + User ID / Shift / Key Failure"
+                    help="Downloads all data + User ID / Shift / Key Failure"
                 )
             except Exception as _ex_err:
-                st.warning(f"⚠ Export Excel indisponible : {_ex_err}")
+                st.warning(f"⚠ Excel export unavailable: {_ex_err}")
 
         # ── Persistance : uniquement au clic Enregistrer ─────────────────────
         if _save_clicked and _edited is not None:
@@ -2716,13 +2725,12 @@ with tab_qual:
                     <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;
                                 font-weight:800;color:#1e8449;text-transform:uppercase;
                                 letter-spacing:1px;margin-bottom:3px">
-                      Enregistrement réussi
+                      Changes saved
                     </div>
                     <div style="font-size:12px;color:#145a32;line-height:1.6">
                       <strong>{_nr}</strong> cellule{"s" if _nr != 1 else ""}
-                      modifiée{"s" if _nr != 1 else ""} sauvegardée{"s" if _nr != 1 else ""}
-                      dans la session.
-                      Les données sont prêtes pour l'export PDF et CSV.
+                      cell{"s" if _nr != 1 else ""} modified and saved to session.
+                      Data is ready for PDF and CSV export.
                     </div>
                   </div>
                 </div>
@@ -2735,14 +2743,14 @@ with tab_qual:
                             display:flex;align-items:center;gap:10px">
                   <span style="font-size:18px">ℹ️</span>
                   <span style="font-size:12px;color:#5d4037">
-                    Aucune modification détectée par rapport au dernier enregistrement.
+                    No changes detected compared to last save.
                   </span>
                 </div>
                 """, unsafe_allow_html=True)
 
     # ── Section export récap (sous le tableau) ───────────────────────────────
     if _qual_n > 0:
-        st.markdown(f'<div class="te-section">Synthèse des Arrêts Qualifiés</div>',
+        st.markdown(f'<div class="te-section">Qualified Stops Summary</div>',
                     unsafe_allow_html=True)
 
         _q_all = df[df[["Shift","Key Failure"]].apply(_is_qualified, axis=1)]
@@ -2751,21 +2759,21 @@ with tab_qual:
         # Métriques rapides
         _qm1, _qm2, _qm3 = st.columns(3)
         with _qm1:
-            st.metric("✅ Arrêts qualifiés", f"{_qual_n} / {_stop_n}",
-                      delta=f"{_pct_q:.0f}% du total")
+            st.metric("✅ Qualified Stops", f"{_qual_n} / {_stop_n}",
+                      delta=f"{_pct_q:.0f}% of total")
         with _qm2:
             _uid_n = int((_q_all.get("User ID", pd.Series(dtype=str))
                            .astype(str).str.strip()
                            .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
                            .notna()).sum())
-            st.metric("👤 Avec User ID", f"{_uid_n} lignes",
-                      delta="signées" if _uid_n > 0 else "aucune")
+            st.metric("👤 With User ID", f"{_uid_n} rows",
+                      delta="signed" if _uid_n > 0 else "none")
         with _qm3:
             _kf_n = int((_q_all.get("Key Failure", pd.Series(dtype=str))
                           .astype(str).str.strip()
                           .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
                           .notna()).sum())
-            st.metric("🔧 Key Failure renseignée", f"{_kf_n} lignes")
+            st.metric("🔧 Key Failure filled", f"{_kf_n} rows")
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
@@ -2778,18 +2786,18 @@ with tab_qual:
         _ec1, _ec2 = st.columns(2)
         with _ec1:
             st.download_button(
-                f"⬇ CSV — {_qual_n} ARRÊTS QUALIFIÉS",
+                f"⬇ CSV — {_qual_n} QUALIFIED STOP(S)",
                 data=_q_all[_q_exp_cols].to_csv(
                     index=False, sep=";").encode("utf-8"),
                 file_name=f"TE_arrets_qualifies_{_ts}.csv",
                 mime="text/csv",
                 use_container_width=True,
-                help="Export CSV des arrêts qualifiés uniquement")
+                help="Export CSV of qualified stops only")
         with _ec2:
-            st.info(f"📄 **{_qual_n}** arrêts qualifiés · "
-                    f"Le rapport PDF complet est disponible dans l'onglet **📊 KPIs** · "
-                    f"L'export Excel complet (toutes données + qualif) "
-                    f"est disponible via le bouton **📥 EXCEL** ci-dessus.")
+            st.info(f"📄 **{_qual_n}** qualified stop(s) · "
+                    f"Full PDF report available in **📊 KPIs** tab · "
+                    f"Full Excel export (all data + qualification) "
+                    f"available via the **📥 EXCEL** button above.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  FOOTER
