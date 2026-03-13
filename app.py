@@ -1099,30 +1099,34 @@ with tab_kpi:
     st.markdown('<div class="te-section">📈 Évolution des Performances</div>',
                 unsafe_allow_html=True)
 
-    # ── Extraction des time features (robuste, sans conflit colonne Hydra) ────
+    # ── Extraction des time features ──────────────────────────────────────────
     if "date_only" in df.columns:
         _MONTH_FR = {1:"Jan", 2:"Fév", 3:"Mar", 4:"Avr", 5:"Mai", 6:"Juin",
                      7:"Juil", 8:"Aoû", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Déc"}
         _df_t = df.copy()
         _dt   = pd.to_datetime(_df_t["date_only"], errors="coerce")
-        _df_t["_month_num"]  = _dt.dt.month
-        _df_t["_month_year"] = _dt.dt.to_period("M").astype(str)   # "2025-03"
-        _df_t["_month_lbl"]  = _dt.dt.month.map(_MONTH_FR).fillna("—") + \
-                                " " + _dt.dt.year.astype(str).str[-2:]  # "Mar 25"
-        _df_t["_week_num"]   = _dt.dt.isocalendar().week.astype("Int64")
-        _df_t["_week_year"]  = _dt.dt.isocalendar().year.astype("Int64")
-        _df_t["_week_lbl"]   = "S" + _df_t["_week_num"].astype(str)  # "S12"
 
-        # ── Fonction d'agrégat générique ──────────────────────────────────────
-        def _te_agg(lbl_col, sort_col):
-            """Agrège MTTR/MTBF/dispo par période. Retourne df trié."""
+        # ── Clés de tri NUMÉRIQUES (pas de chaîne "S12" pour le sort) ─────────
+        _df_t["_month_num"]    = _dt.dt.month.astype("Int64")          # 1–12
+        _df_t["_month_year_n"] = _dt.dt.year.astype("Int64") * 100 + \
+                                  _dt.dt.month.astype("Int64")          # 202503
+        _df_t["_month_lbl"]    = (_dt.dt.month.map(_MONTH_FR).fillna("—") +
+                                   " " + _dt.dt.year.astype(str).str[-2:])  # "Mar 25"
+        _df_t["_week_num"]     = _dt.dt.isocalendar().week.astype("Int64")
+        _df_t["_week_year_n"]  = (_dt.dt.isocalendar().year.astype("Int64") * 100 +
+                                   _dt.dt.isocalendar().week.astype("Int64"))  # 202512
+        _df_t["_week_lbl"]     = "S" + _df_t["_week_num"].astype(str)   # "S12"
+
+        # ── Agrégat générique — trié par clé numérique ────────────────────────
+        def _te_agg(lbl_col, sort_key):
+            """Agrège par période, trie par clé numérique, retourne df propre."""
             agg = _df_t.groupby(lbl_col, as_index=False).agg(
-                _sort    =(sort_col,  "first"),
-                mttr_sum =("mttr_h",  "sum"),
-                mtbf_sum =("mtbf_h",  "sum"),
-                nb_stops =("mttr_h",  lambda x: (x > 0).sum()),
-                nb_events=("mttr_h",  "count"),
-            ).sort_values("_sort")
+                _sort_key =(sort_key,  "first"),   # valeur numérique pour tri
+                mttr_sum  =("mttr_h",  "sum"),
+                mtbf_sum  =("mtbf_h",  "sum"),
+                nb_stops  =("mttr_h",  lambda x: (x > 0).sum()),
+                nb_events =("mttr_h",  "count"),
+            ).sort_values("_sort_key")  # ← tri numérique chronologique
 
             # Disponibilité = MTBF / (MTBF + MTTR) ou fallback statut
             if has_mtbf:
@@ -1130,93 +1134,90 @@ with tab_kpi:
                     lambda r: round(r.mtbf_sum / (r.mtbf_sum + r.mttr_sum) * 100, 2)
                     if (r.mtbf_sum + r.mttr_sum) > 0 else 100.0, axis=1)
             else:
-                prod_grp = (
-                    _df_t[_df_t[COL_STATUS].str.upper().str.contains("PRODUCTION", na=False)]
-                    .groupby(lbl_col).size().reset_index(name="n_prod"))
-                tot_grp = _df_t.groupby(lbl_col).size().reset_index(name="n_tot")
-                ratio   = prod_grp.merge(tot_grp, on=lbl_col, how="right").fillna(0)
-                ratio["dispo"] = (ratio["n_prod"] / ratio["n_tot"] * 100).round(2)
-                agg = agg.merge(ratio[[lbl_col, "dispo"]], on=lbl_col, how="left")
+                _prod = (_df_t[_df_t[COL_STATUS].str.upper()
+                               .str.contains("PRODUCTION", na=False)]
+                         .groupby(lbl_col).size().reset_index(name="n_prod"))
+                _tot  = _df_t.groupby(lbl_col).size().reset_index(name="n_tot")
+                _rat  = _prod.merge(_tot, on=lbl_col, how="right").fillna(0)
+                _rat["dispo"] = (_rat["n_prod"] / _rat["n_tot"] * 100).round(2)
+                agg = agg.merge(_rat[[lbl_col, "dispo"]], on=lbl_col, how="left")
                 agg["dispo"] = agg["dispo"].fillna(0.0)
 
-            agg = agg.rename(columns={lbl_col: "label",
-                                       "mttr_sum": "mttr_h",
-                                       "mtbf_sum": "mtbf_h"})
+            agg = agg.rename(columns={lbl_col:"label",
+                                       "mttr_sum":"mttr_h",
+                                       "mtbf_sum":"mtbf_h"})
             agg["mttr_h"] = agg["mttr_h"].round(4)
             agg["mtbf_h"] = agg["mtbf_h"].round(3)
-            return agg[["label","mttr_h","mtbf_h","dispo","nb_stops","nb_events"]].reset_index(drop=True)
+            return agg[["label","mttr_h","mtbf_h","dispo",
+                        "nb_stops","nb_events"]].reset_index(drop=True)
 
-        _df_week  = _te_agg("_week_lbl",  "_week_year")
-        _df_month = _te_agg("_month_lbl", "_month_year")
+        # Tri par clé numérique année×100+semaine / année×100+mois
+        _df_week  = _te_agg("_week_lbl",  "_week_year_n")
+        _df_month = _te_agg("_month_lbl", "_month_year_n")
 
         # ── Line chart helper ─────────────────────────────────────────────────
         def _te_line(x_vals, y_vals, title, y_title, color,
-                     target=None, y_fmt=None, height=240):
-            """Retourne une figure Plotly line+markers avec fill subtil."""
+                     target=None, y_fmt=None, height=450):
             fig = go.Figure()
-            # Ligne target
             if target is not None:
                 fig.add_trace(go.Scatter(
                     x=x_vals, y=[target]*len(x_vals),
                     mode="lines", name=f"Cible {target}%",
-                    line=dict(color=TE_RED, dash="dot", width=1.5),
+                    line=dict(color=TE_RED, dash="dot", width=1.8),
                     hoverinfo="skip"))
-            # Fill zone sous la courbe
-            fill_color = (f"rgba(232,101,10,0.07)"  if color == TE_ORANGE else
-                          f"rgba(27,42,74,0.07)"     if color == TE_NAVY   else
-                          f"rgba(39,174,96,0.07)")
+            fill_color = ("rgba(232,101,10,0.08)"  if color == TE_ORANGE else
+                          "rgba(27,42,74,0.08)"     if color == TE_NAVY   else
+                          "rgba(39,174,96,0.08)")
             fig.add_trace(go.Scatter(
                 x=x_vals, y=y_vals,
                 mode="lines+markers",
                 name=y_title,
                 line=dict(color=color, width=2.5),
-                marker=dict(size=8, color=color,
+                marker=dict(size=9, color=color,
                             line=dict(color="white", width=2),
                             symbol="circle"),
                 fill="tozeroy", fillcolor=fill_color,
-                hovertemplate=f"<b>%{{x}}</b><br>{y_title}: <b>%{{y}}</b><extra></extra>",
+                hovertemplate=(f"<b>%{{x}}</b><br>"
+                               f"{y_title}: <b>%{{y}}</b><extra></extra>"),
             ))
             y_axis = dict(gridcolor="#F0E8E0", zeroline=False,
-                          tickfont=dict(size=9, color="#9A7A60"))
+                          tickfont=dict(size=10, color="#9A7A60"))
             if y_fmt:
                 y_axis["tickformat"] = y_fmt
             if target is not None:
                 _safe_min = min((v for v in y_vals if pd.notna(v)), default=0)
-                y_axis["range"] = [max(0, _safe_min - 5), 105]
+                y_axis["range"] = [max(0, float(_safe_min) - 5), 105]
             apply(fig, height=height, showlegend=False,
                   title=dict(text=title,
-                             font=dict(size=11, color=TE_BLACK,
+                             font=dict(size=13, color=TE_BLACK,
                                        family="Barlow Condensed"),
                              x=0.01, y=0.97),
-                  xaxis=dict(tickfont=dict(size=9, color="#9A7A60"),
+                  xaxis=dict(tickfont=dict(size=10, color="#9A7A60"),
                              gridcolor="#F0E8E0", zeroline=False,
-                             tickangle=-35 if len(x_vals) > 8 else 0),
+                             tickangle=-40 if len(x_vals) > 10 else 0),
                   yaxis=y_axis,
-                  margin=dict(l=10, r=10, t=34, b=30))
+                  margin=dict(l=12, r=12, t=40, b=40))
             return fig
 
-        # ── Label mini-section ─────────────────────────────────────────────────
+        # ── Helpers UI ────────────────────────────────────────────────────────
         def _te_mini_label(txt):
             st.markdown(
                 f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:8px;'
                 f'font-weight:700;letter-spacing:2px;text-transform:uppercase;'
-                f'color:{TE_ORANGE};margin:12px 0 6px 0;display:flex;align-items:center;gap:8px">'
-                f'<span style="width:12px;height:2px;background:{TE_ORANGE};display:inline-block"></span>'
-                f'{txt}'
-                f'<span style="flex:1;height:1px;background:linear-gradient(90deg,#F0D0B0,transparent);'
+                f'color:{TE_ORANGE};margin:16px 0 6px 0;'
+                f'display:flex;align-items:center;gap:8px">'
+                f'<span style="width:12px;height:2px;background:{TE_ORANGE};'
+                f'display:inline-block"></span>{txt}'
+                f'<span style="flex:1;height:1px;'
+                f'background:linear-gradient(90deg,#F0D0B0,transparent);'
                 f'display:inline-block"></span></div>',
                 unsafe_allow_html=True)
 
-        # ── Tableau récap helper ───────────────────────────────────────────────
         def _te_recap_table(df_agg, periode_col):
             _tbl = df_agg.rename(columns={
-                "label":     periode_col,
-                "mttr_h":    "MTTR (h)",
-                "mtbf_h":    "MTBF (h)",
-                "dispo":     "Disponibilité (%)",
-                "nb_stops":  "Arrêts",
-                "nb_events": "Events",
-            })
+                "label":"label_raw","mttr_h":"MTTR (h)","mtbf_h":"MTBF (h)",
+                "dispo":"Disponibilité (%)","nb_stops":"Arrêts","nb_events":"Events"})
+            _tbl.insert(0, periode_col, _tbl.pop("label_raw"))
             def _sd(val):
                 try:
                     v = float(val)
@@ -1227,13 +1228,45 @@ with tab_kpi:
             st.dataframe(
                 _tbl.style
                     .applymap(_sd, subset=["Disponibilité (%)"])
-                    .format({"Disponibilité (%)": "{:.2f}%",
-                             "MTTR (h)": "{:.4f}",
-                             "MTBF (h)": "{:.3f}"}),
+                    .format({"Disponibilité (%)":"{:.2f}%",
+                             "MTTR (h)":"{:.4f}","MTBF (h)":"{:.3f}"}),
                 use_container_width=True, hide_index=True,
-                height=min(380, len(_tbl) * 36 + 42))
+                height=min(420, len(_tbl) * 36 + 42))
 
-        # ── Sub-tabs ───────────────────────────────────────────────────────────
+        # ── Sélecteur de graphique ─────────────────────────────────────────────
+        _chart_choice = st.radio(
+            "🔍 Choisir le graphique à visualiser :",
+            options=["Disponibilité (%)", "MTTR (h)", "MTBF (h)"],
+            index=0, horizontal=True, key="te_chart_pick")
+
+        # ── Rendu du graphique sélectionné (pleine largeur) ───────────────────
+        def _te_render_charts(df_v, suffix, is_mtbf):
+            """Affiche 1 graphique sélectionné pleine largeur + tableau récap."""
+            x = df_v["label"].tolist()
+
+            _specs = {
+                "Disponibilité (%)": (
+                    df_v["dispo"].tolist(),
+                    "Disponibilité (%)", "Dispo (%)", TE_GREEN, 95, ".1f"),
+                "MTBF (h)": (
+                    df_v["mtbf_h"].tolist() if is_mtbf else [0]*len(df_v),
+                    "MTBF (h) — Fiabilité", "MTBF (h)", TE_NAVY, None, None),
+                "MTTR (h)": (
+                    df_v["mttr_h"].tolist(),
+                    "MTTR (h) — Réparabilité", "MTTR (h)", TE_ORANGE, None, None),
+            }
+            _y, _ttl, _yt, _clr, _tgt, _fmt = _specs[_chart_choice]
+
+            st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+            st.plotly_chart(
+                _te_line(x, _y, _ttl, _yt, _clr,
+                         target=_tgt, y_fmt=_fmt, height=460),
+                use_container_width=True, config=PCONF)
+            if _chart_choice == "MTBF (h)" and not is_mtbf:
+                st.caption("⚠ Colonne MTBF absente du fichier Hydra.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Sub-tabs ──────────────────────────────────────────────────────────
         _stab_w, _stab_m = st.tabs(["📆  Vue Hebdomadaire", "📅  Vue Mensuelle"])
 
         # ─── VUE HEBDOMADAIRE ─────────────────────────────────────────────────
@@ -1241,33 +1274,7 @@ with tab_kpi:
             if len(_df_week) < 2:
                 st.info("Pas assez de données hebdomadaires (minimum 2 semaines requises).")
             else:
-                _wc1, _wc2, _wc3 = st.columns(3, gap="medium")
-                with _wc1:
-                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                    st.plotly_chart(
-                        _te_line(_df_week["label"], _df_week["dispo"],
-                                 "Disponibilité (%)", "Dispo (%)", TE_GREEN,
-                                 target=95, y_fmt=".1f"),
-                        use_container_width=True, config=PCONF)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                with _wc2:
-                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                    st.plotly_chart(
-                        _te_line(_df_week["label"],
-                                 _df_week["mtbf_h"] if has_mtbf else [0]*len(_df_week),
-                                 "MTBF (h) — Fiabilité", "MTBF (h)", TE_NAVY),
-                        use_container_width=True, config=PCONF)
-                    if not has_mtbf:
-                        st.caption("⚠ Colonne MTBF absente du fichier Hydra.")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                with _wc3:
-                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                    st.plotly_chart(
-                        _te_line(_df_week["label"], _df_week["mttr_h"],
-                                 "MTTR (h) — Réparabilité", "MTTR (h)", TE_ORANGE),
-                        use_container_width=True, config=PCONF)
-                    st.markdown("</div>", unsafe_allow_html=True)
-
+                _te_render_charts(_df_week, "w", has_mtbf)
                 _te_mini_label("Récapitulatif hebdomadaire")
                 _te_recap_table(_df_week, "Semaine")
 
@@ -1276,33 +1283,7 @@ with tab_kpi:
             if len(_df_month) < 2:
                 st.info("Pas assez de données mensuelles (minimum 2 mois requis).")
             else:
-                _mc1, _mc2, _mc3 = st.columns(3, gap="medium")
-                with _mc1:
-                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                    st.plotly_chart(
-                        _te_line(_df_month["label"], _df_month["dispo"],
-                                 "Disponibilité (%)", "Dispo (%)", TE_GREEN,
-                                 target=95, y_fmt=".1f"),
-                        use_container_width=True, config=PCONF)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                with _mc2:
-                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                    st.plotly_chart(
-                        _te_line(_df_month["label"],
-                                 _df_month["mtbf_h"] if has_mtbf else [0]*len(_df_month),
-                                 "MTBF (h) — Fiabilité", "MTBF (h)", TE_NAVY),
-                        use_container_width=True, config=PCONF)
-                    if not has_mtbf:
-                        st.caption("⚠ Colonne MTBF absente du fichier Hydra.")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                with _mc3:
-                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                    st.plotly_chart(
-                        _te_line(_df_month["label"], _df_month["mttr_h"],
-                                 "MTTR (h) — Réparabilité", "MTTR (h)", TE_ORANGE),
-                        use_container_width=True, config=PCONF)
-                    st.markdown("</div>", unsafe_allow_html=True)
-
+                _te_render_charts(_df_month, "m", has_mtbf)
                 _te_mini_label("Récapitulatif mensuel")
                 _te_recap_table(_df_month, "Mois")
 
@@ -1605,178 +1586,717 @@ with tab_kpi:
     st.markdown('<div class="te-section">Data Export</div>', unsafe_allow_html=True)
     today_str = datetime.now().strftime("%Y%m%d_%H%M")
 
-    # PDF builder
+    # ── Helper : convertit un hex (#RRGGBB) en rgba(r,g,b,a) pour Plotly ──────
+    def _hex_to_rgba(hex_color: str, alpha: float = 0.1) -> str:
+        h = hex_color.lstrip("#")[:6]   # on prend toujours les 6 premiers chiffres
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  PDF BUILDER  — ReportLab + Kaleido
+    # ══════════════════════════════════════════════════════════════════════════
     def build_pdf(df_in: pd.DataFrame, kpi_d: dict,
                   ma_table: pd.DataFrame, pareto_df: pd.DataFrame) -> bytes:
+
+        # ── Imports ────────────────────────────────────────────────────────────
         from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors as rl_colors
-        from reportlab.lib.units import cm
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
-                                         Table, TableStyle, HRFlowable, PageBreak)
-        from reportlab.lib.colors import HexColor
+        from reportlab.lib           import colors as rlc
+        from reportlab.lib.units     import cm
+        from reportlab.lib.styles    import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.colors    import HexColor
+        from reportlab.platypus      import (SimpleDocTemplate, Paragraph,
+                                              Spacer, Table, TableStyle,
+                                              HRFlowable, PageBreak,
+                                              Image as RLImage)
 
-        buf_pdf = io.BytesIO()
-        W, _ = A4
-        OR  = HexColor("#E8650A"); NV = HexColor("#1B2A4A")
-        WH  = rl_colors.white;    BR = HexColor("#A07858")
-        BH  = HexColor("#2A1A0A"); BC = HexColor("#FFF8F2")
-        GR  = HexColor("#d5f5e3"); AM = HexColor("#fef9e7"); RD = HexColor("#fdf2f2")
+        # ── Palette ────────────────────────────────────────────────────────────
+        C_NAVY = HexColor("#1B2A4A");  C_OR   = HexColor("#E8650A")
+        C_DARK = HexColor("#C04D05");  C_CREAM= HexColor("#FFF8F2")
+        C_BR   = HexColor("#A07858");  C_WH   = rlc.white
+        C_GR   = HexColor("#27AE60");  C_RED2 = HexColor("#C0392B")
+        C_AM   = HexColor("#F39C12");  C_BG   = HexColor("#F7F4F0")
+        _PAL   = ["#E8650A","#1B2A4A","#27AE60","#C0392B","#8E44AD","#2980B9"]
 
-        sty  = getSampleStyleSheet()
-        s_h1 = ParagraphStyle("h1", parent=sty["Heading1"], fontSize=22,
-                               textColor=WH, fontName="Helvetica-Bold", spaceAfter=4)
-        s_sb = ParagraphStyle("sb", parent=sty["Normal"], fontSize=9, textColor=BR, leading=13)
-        s_sc = ParagraphStyle("sc", parent=sty["Normal"], fontSize=10, textColor=OR,
-                               fontName="Helvetica-Bold", spaceAfter=4, spaceBefore=12)
+        W, H   = A4
+        MARGIN = 1.8 * cm
+        IW     = W - 2 * MARGIN           # inner width
+        buf    = io.BytesIO()
+
+        # ── Text styles ────────────────────────────────────────────────────────
+        _sty = getSampleStyleSheet()
+        def ps(name, **kw):
+            return ParagraphStyle(name, parent=_sty["Normal"], **kw)
+
+        S_BRAND  = ps("brand", fontSize=9,  textColor=C_WH,
+                      fontName="Helvetica-Bold", letterSpacing=4, leading=14)
+        S_TITLE  = ps("ctit",  fontSize=30, textColor=C_WH,
+                      fontName="Helvetica-Bold", leading=34)
+        S_SUB    = ps("csub",  fontSize=12, textColor=C_BG,
+                      fontName="Helvetica",      leading=16)
+        S_DATE   = ps("cdat",  fontSize=10, textColor=C_OR,
+                      fontName="Helvetica-Bold", leading=14)
+        S_SEC    = ps("sec",   fontSize=11, textColor=C_OR,
+                      fontName="Helvetica-Bold", leading=14,
+                      spaceBefore=12, spaceAfter=5)
+        S_SSEC   = ps("ssec",  fontSize=9,  textColor=C_NAVY,
+                      fontName="Helvetica-Bold", leading=12,
+                      spaceBefore=8, spaceAfter=4)
+        S_BODY   = ps("body",  fontSize=9,  textColor=HexColor("#3A2A1A"),
+                      leading=13)
+        S_CAP    = ps("cap",   fontSize=8,  textColor=C_BR,
+                      leading=11, spaceAfter=3, leftIndent=4)
 
         story = []
 
-        # ── Cover ──
-        story.append(Paragraph("TE CONNECTIVITY", ParagraphStyle(
-            "br", fontSize=10, textColor=OR, fontName="Helvetica-Bold",
-            leading=13, spaceAfter=2, letterSpacing=3)))
-        story.append(Paragraph("TPM KPI MAINTENANCE REPORT", s_h1))
-        story.append(Paragraph("Stamping Dept — Bruderer Presses · Tangier Plant 1310", s_sb))
-        story.append(Spacer(1, 0.3*cm))
-        story.append(HRFlowable(width="100%", thickness=2, color=OR, spaceAfter=12))
+        # ══════════════════════════════════════════════════════════════════════
+        #  HELPERS
+        # ══════════════════════════════════════════════════════════════════════
 
-        cov = [
-            ["Indicator", "Value"],
-            ["Global Availability",   f"{kpi_d['dispo']:.2f}%"],
-            ["Avg MTTR / Stop",        f"{kpi_d['mttr_mean_h']:.4f} h  ({round(kpi_d['mttr_mean_h']*60,1)} min)"],
-            ["Avg MTBF",               f"{kpi_d['mtbf_mean_h']:.2f} h"],
-            ["Total Stops",            str(kpi_d['nb_arrets'])],
-            ["Total Events",           f"{kpi_d['nb_rows']:,}"],
-            ["Report Generated",       datetime.now().strftime("%m/%d/%Y at %H:%M")],
-        ]
-        cw2 = [(W-4*cm)/2]*2
-        ct = Table(cov, colWidths=cw2, repeatRows=1)
-        ct.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),NV), ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-            ("TEXTCOLOR",(0,0),(-1,0),WH),  ("FONTSIZE",(0,0),(-1,-1),9),
-            ("ALIGN",(0,0),(-1,-1),"CENTER"),("TOPPADDING",(0,0),(-1,-1),7),
-            ("BOTTOMPADDING",(0,0),(-1,-1),7),
-            ("BOX",(0,0),(-1,-1),0.5,HexColor("#EDE0D4")),
-            ("INNERGRID",(0,0),(-1,-1),0.3,HexColor("#F0E0D0")),
-            ("ROWBACKGROUNDS",(0,1),(-1,-1),[BC,WH]*10),
+        def hr(color=C_OR, thick=1.2):
+            return HRFlowable(width="100%", thickness=thick,
+                               color=color, spaceAfter=7, spaceBefore=2)
+
+        def section(txt):
+            story.append(Spacer(1, 0.1*cm))
+            story.append(Paragraph(txt, S_SEC))
+            story.append(hr())
+
+        def _tbl(data, cws, hbg=C_NAVY, hfg=C_WH, fs=8, extras=None):
+            """Styled ReportLab table."""
+            cmds = [
+                ("BACKGROUND",    (0,0), (-1,0),  hbg),
+                ("TEXTCOLOR",     (0,0), (-1,0),  hfg),
+                ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
+                ("FONTNAME",      (0,1), (-1,-1), "Helvetica"),
+                ("FONTSIZE",      (0,0), (-1,-1), fs),
+                ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+                ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+                ("TOPPADDING",    (0,0), (-1,-1), 5),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+                ("BOX",           (0,0), (-1,-1), 0.5, HexColor("#DDD0C8")),
+                ("INNERGRID",     (0,0), (-1,-1), 0.3, HexColor("#EDE0D4")),
+                ("ROWBACKGROUNDS",(0,1), (-1,-1), [C_CREAM, C_WH]),
+            ]
+            if extras:
+                cmds += extras
+            t = Table(data, colWidths=cws, repeatRows=1)
+            t.setStyle(TableStyle(cmds))
+            return t
+
+        def fig_to_png(fig, w_px=720, h_px=300):
+            try:
+                import kaleido  # noqa
+                return fig.to_image(format="png", width=w_px,
+                                     height=h_px, scale=2)
+            except Exception:
+                return None
+
+        def insert_fig(fig, caption="", w_px=720, h_px=300, img_w=None):
+            if img_w is None:
+                img_w = IW
+            png = fig_to_png(fig, w_px, h_px)
+            if png:
+                story.append(RLImage(io.BytesIO(png),
+                                      width=img_w,
+                                      height=img_w * h_px / w_px))
+                if caption:
+                    story.append(Paragraph(caption, S_CAP))
+            else:
+                story.append(Paragraph(
+                    f"⚠ Graphique indisponible ({caption}) — "
+                    "pip install kaleido", S_CAP))
+            story.append(Spacer(1, 0.2*cm))
+
+        # ── Trend data builder (réplique exacte de _te_agg dans l'app) ────────
+        def _pdf_te_agg(df_src):
+            """
+            Recalcule _df_week et _df_month depuis df_src,
+            en répliquant la logique exacte de l'app (clés numériques, dispo).
+            Retourne (df_week, df_month) — DataFrames vides si date absente.
+            """
+            if "date_only" not in df_src.columns:
+                return pd.DataFrame(), pd.DataFrame()
+
+            _MFR = {1:"Jan",2:"Fév",3:"Mar",4:"Avr",5:"Mai",6:"Juin",
+                    7:"Juil",8:"Aoû",9:"Sep",10:"Oct",11:"Nov",12:"Déc"}
+            _t  = df_src.copy()
+            _dt = pd.to_datetime(_t["date_only"], errors="coerce")
+
+            _t["_month_year_n"] = (_dt.dt.year.astype("Int64")*100 +
+                                    _dt.dt.month.astype("Int64"))
+            _t["_month_lbl"]    = (_dt.dt.month.map(_MFR).fillna("—") + " " +
+                                    _dt.dt.year.astype(str).str[-2:])
+            _t["_week_year_n"]  = (_dt.dt.isocalendar().year.astype("Int64")*100 +
+                                    _dt.dt.isocalendar().week.astype("Int64"))
+            _t["_week_lbl"]     = "S" + _dt.dt.isocalendar().week.astype(str)
+
+            def _agg(lbl_col, sort_key):
+                agg = _t.groupby(lbl_col, as_index=False).agg(
+                    _sk      =(sort_key,  "first"),
+                    mttr_h   =("mttr_h",  "sum"),
+                    mtbf_h   =("mtbf_h",  "sum"),
+                    nb_stops =("mttr_h",  lambda x: (x > 0).sum()),
+                    nb_events=("mttr_h",  "count"),
+                ).sort_values("_sk")
+
+                # Disponibilité
+                if has_mtbf:
+                    agg["dispo"] = agg.apply(
+                        lambda r: round(r.mtbf_h/(r.mtbf_h+r.mttr_h)*100, 2)
+                        if (r.mtbf_h+r.mttr_h) > 0 else 100.0, axis=1)
+                else:
+                    _prod = (_t[_t[COL_STATUS].str.upper()
+                                .str.contains("PRODUCTION", na=False)]
+                             .groupby(lbl_col).size()
+                             .reset_index(name="n_prod"))
+                    _tot  = _t.groupby(lbl_col).size().reset_index(name="n_tot")
+                    _rat  = _prod.merge(_tot, on=lbl_col, how="right").fillna(0)
+                    _rat["dispo"] = (_rat["n_prod"]/_rat["n_tot"]*100).round(2)
+                    agg = agg.merge(_rat[[lbl_col,"dispo"]], on=lbl_col, how="left")
+                    agg["dispo"] = agg["dispo"].fillna(0.0)
+
+                agg = agg.rename(columns={lbl_col:"label"})
+                agg["mttr_h"] = agg["mttr_h"].round(4)
+                agg["mtbf_h"] = agg["mtbf_h"].round(3)
+                return agg[["label","mttr_h","mtbf_h","dispo",
+                             "nb_stops","nb_events"]].reset_index(drop=True)
+
+            return _agg("_week_lbl","_week_year_n"), _agg("_month_lbl","_month_year_n")
+
+        def _make_trend_fig(df_v, col, title, color_hex,
+                             target=None, h_px=280):
+            """Crée une figure Plotly d'évolution pour le PDF."""
+            x  = df_v["label"].tolist()
+            y  = df_v[col].tolist()
+            fig = go.Figure()
+            # Ligne cible
+            if target is not None and x:
+                fig.add_trace(go.Scatter(
+                    x=x, y=[target]*len(x),
+                    mode="lines", name=f"Cible {target}%",
+                    line=dict(color="#C0392B", dash="dot", width=2),
+                    hoverinfo="skip"))
+            # Remplissage
+            _rgba_fill = _hex_to_rgba(color_hex, 0.08)
+            fig.add_trace(go.Scatter(
+                x=x, y=y,
+                mode="lines+markers",
+                line=dict(color=color_hex, width=2.5),
+                marker=dict(size=8, color=color_hex,
+                            line=dict(color="white", width=1.8)),
+                fill="tozeroy", fillcolor=_rgba_fill,
+                hoverinfo="skip"))
+            _ya = dict(gridcolor="#F0E8E0", zeroline=False,
+                       tickfont=dict(size=9, color="#9A7A60"))
+            if target is not None and y:
+                _ya["range"] = [max(0, min(float(v) for v in y)-5), 105]
+            fig.update_layout(
+                height=h_px, width=720,
+                showlegend=False,
+                paper_bgcolor="white", plot_bgcolor="#FAFAFA",
+                title=dict(text=title,
+                           font=dict(size=12, color="#1B2A4A"), x=0.01),
+                xaxis=dict(tickfont=dict(size=9, color="#9A7A60"),
+                           gridcolor="#F0E8E0",
+                           tickangle=-35 if len(x) > 10 else 0),
+                yaxis=_ya,
+                margin=dict(l=48, r=16, t=36, b=48))
+            return fig
+
+        def _recap_pdf_table(df_v, periode_lbl):
+            """Tableau récap hebdo/mensuel pour le PDF."""
+            hdr = [[periode_lbl, "MTTR (h)", "MTBF (h)",
+                    "Disponibilité (%)", "Arrêts", "Events"]]
+            rows = []
+            extras = []
+            for ri, row in df_v.iterrows():
+                d = float(row["dispo"])
+                rows.append([
+                    str(row["label"]),
+                    f"{float(row['mttr_h']):.4f}",
+                    f"{float(row['mtbf_h']):.3f}",
+                    f"{d:.2f}%",
+                    str(int(row["nb_stops"])),
+                    str(int(row["nb_events"])),
+                ])
+                ri_tbl = len(rows)
+                bg = (HexColor("#D5F5E3") if d >= 95
+                      else HexColor("#FEF9E7") if d >= 90
+                      else HexColor("#FDEBD0"))
+                tc = (HexColor("#1E8449") if d >= 95
+                      else HexColor("#9A7D0A") if d >= 90
+                      else HexColor("#922B21"))
+                extras += [
+                    ("BACKGROUND", (3, ri_tbl), (3, ri_tbl), bg),
+                    ("TEXTCOLOR",  (3, ri_tbl), (3, ri_tbl), tc),
+                    ("FONTNAME",   (3, ri_tbl), (3, ri_tbl), "Helvetica-Bold"),
+                ]
+            cws = [IW*x for x in [0.14, 0.17, 0.17, 0.22, 0.13, 0.13]]
+            return _tbl(hdr + rows, cws, fs=8, extras=extras)
+
+        # ══════════════════════════════════════════════════════════════════════
+        #  PAGE 1 — COUVERTURE
+        # ══════════════════════════════════════════════════════════════════════
+
+        def _cover_row(content, bg, pad_top=8, pad_bot=8, left=10):
+            t = Table([[content]], colWidths=[IW])
+            t.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0),(-1,-1), bg),
+                ("TOPPADDING",    (0,0),(-1,-1), pad_top),
+                ("BOTTOMPADDING", (0,0),(-1,-1), pad_bot),
+                ("LEFTPADDING",   (0,0),(-1,-1), left),
+                ("RIGHTPADDING",  (0,0),(-1,-1), 10),
+            ]))
+            return t
+
+        # Grand bloc navy — marque + titre
+        story.append(_cover_row(
+            Paragraph("≡ &nbsp; TE CONNECTIVITY", S_BRAND),
+            C_NAVY, pad_top=22, pad_bot=4))
+        story.append(_cover_row(
+            Paragraph("▌ &nbsp; STAMPING DEPT &nbsp;·&nbsp; "
+                      "BRUDERER PRESSES &nbsp;·&nbsp; TANGIER PLANT 1310",
+                      ps("bar", fontSize=8, textColor=C_WH,
+                         fontName="Helvetica-Bold", letterSpacing=2)),
+            C_OR, pad_top=6, pad_bot=6))
+
+        # Titre principal sur fond navy
+        _title_tbl = Table([[
+            Paragraph("TPM KPI DASHBOARD", S_TITLE),
+            Paragraph("Stamping Department<br/>"
+                      "Bruderer Presses S-001 → S-006",
+                      S_SUB),
+        ]], colWidths=[IW*0.60, IW*0.40])
+        _title_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0),(-1,-1), C_NAVY),
+            ("TOPPADDING",    (0,0),(-1,-1), 22),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 10),
+            ("LEFTPADDING",   (0,0),(-1,-1), 10),
+            ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
         ]))
-        story.append(ct)
+        story.append(_title_tbl)
+
+        story.append(_cover_row(
+            Paragraph(
+                f"RAPPORT GÉNÉRÉ LE &nbsp;"
+                f"{datetime.now().strftime('%d/%m/%Y  à  %H:%M')}",
+                S_DATE),
+            C_NAVY, pad_top=2, pad_bot=18))
+
+        story.append(Spacer(1, 0.5*cm))
+
+        # Tableau KPI récap — alternance orange/crème sur colonne label
+        _kpi_data = [
+            ["INDICATEUR", "VALEUR"],
+            ["Disponibilité Globale",
+             f"{kpi_d['dispo']:.2f} %"],
+            ["MTTR Moyen / Arrêt",
+             f"{kpi_d['mttr_mean_h']:.4f} h  "
+             f"({round(kpi_d['mttr_mean_h']*60,1)} min)"],
+            ["MTBF Moyen",
+             f"{kpi_d['mtbf_mean_h']:.2f} h"],
+            ["Nombre Total d'Arrêts",
+             str(kpi_d['nb_arrets'])],
+            ["MTTR Cumulatif",
+             f"{kpi_d['mttr_total_h']:.2f} h"],
+            ["MTBF Cumulatif",
+             f"{kpi_d['mtbf_total_h']:.2f} h"],
+            ["Total Événements Analysés",
+             f"{kpi_d['nb_rows']:,}"],
+        ]
+        _cover_extras = []
+        for _ri in range(1, len(_kpi_data)):
+            _bg = HexColor("#FAD0A8") if _ri % 2 == 1 else C_CREAM
+            _cover_extras.append(("BACKGROUND", (0,_ri),(0,_ri), _bg))
+        story.append(_tbl(_kpi_data, [IW*0.55, IW*0.45],
+                           fs=9, extras=_cover_extras))
         story.append(PageBreak())
 
-        # ── Summary by Machine ──
-        story.append(Paragraph("── SUMMARY TABLE BY MACHINE", s_sc))
-        story.append(HRFlowable(width="100%", thickness=1, color=OR, spaceAfter=8))
-        hd = [["Machine","Total MTTR (h)","Total MTBF (h)","Events","Availability (%)"]]
-        for _, row in ma_table.iterrows():
-            d = float(row["Availability (%)"])
-            hd.append([str(row["Machine"]),
-                        f"{float(row['Total MTTR (h)']):.4f}",
-                        f"{float(row['Total MTBF (h)']):.2f}",
-                        str(int(row["Events"])), f"{d:.1f}%"])
-        cw5 = [(W-4*cm)/5]*5
-        mt2 = Table(hd, colWidths=cw5, repeatRows=1)
-        rs2 = [
-            ("BACKGROUND",(0,0),(-1,0),BH), ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-            ("TEXTCOLOR",(0,0),(-1,0),WH),  ("FONTSIZE",(0,0),(-1,-1),9),
-            ("ALIGN",(0,0),(-1,-1),"CENTER"),("TOPPADDING",(0,0),(-1,-1),6),
-            ("BOTTOMPADDING",(0,0),(-1,-1),6),
-            ("BOX",(0,0),(-1,-1),0.5,HexColor("#EDE0D4")),
-            ("INNERGRID",(0,0),(-1,-1),0.3,HexColor("#F0E0D0")),
-        ]
-        for ri, row in enumerate(hd[1:], start=1):
-            try:
-                d = float(row[4].replace("%",""))
-                bg = GR if d>=95 else AM if d>=90 else RD
-                rs2.append(("BACKGROUND",(4,ri),(4,ri),bg))
-            except Exception: pass
-        mt2.setStyle(TableStyle(rs2))
-        story.append(mt2)
-        story.append(Spacer(1, 14))
+        # ══════════════════════════════════════════════════════════════════════
+        #  PAGE 2 — KPI CARDS + PARETO + PIE
+        # ══════════════════════════════════════════════════════════════════════
 
-        # ── Pareto ──
+        section("── KPIs PRINCIPAUX")
+        _kw = IW / 4
+        _kpi_card = Table([
+            ["Disponibilité",        "Arrêts",
+             "MTTR Moy.",            "MTBF Moy."],
+            [f"{kpi_d['dispo']:.2f} %",
+             str(kpi_d['nb_arrets']),
+             f"{kpi_d['mttr_mean_h']:.4f} h",
+             f"{kpi_d['mtbf_mean_h']:.2f} h"],
+        ], colWidths=[_kw]*4)
+        _kpi_card.setStyle(TableStyle([
+            ("FONTNAME",     (0,0),(-1,0),  "Helvetica-Bold"),
+            ("FONTNAME",     (0,1),(-1,1),  "Helvetica-Bold"),
+            ("FONTSIZE",     (0,0),(-1,0),  8),
+            ("FONTSIZE",     (0,1),(-1,1),  15),
+            ("TEXTCOLOR",    (0,0),(-1,-1), C_WH),
+            ("ALIGN",        (0,0),(-1,-1), "CENTER"),
+            ("VALIGN",       (0,0),(-1,-1), "MIDDLE"),
+            ("TOPPADDING",   (0,0),(-1,0),  6),
+            ("BOTTOMPADDING",(0,0),(-1,0),  4),
+            ("TOPPADDING",   (0,1),(-1,1),  8),
+            ("BOTTOMPADDING",(0,1),(-1,1),  12),
+            ("BACKGROUND",   (0,0),(0,-1),  C_NAVY),
+            ("BACKGROUND",   (1,0),(1,-1),  C_OR),
+            ("BACKGROUND",   (2,0),(2,-1),  C_DARK),
+            ("BACKGROUND",   (3,0),(3,-1),  HexColor("#2A4A6A")),
+            ("INNERGRID",    (0,0),(-1,-1), 1.5, C_WH),
+        ]))
+        story.append(_kpi_card)
+        story.append(Spacer(1, 0.4*cm))
+
+        # Pareto figure
+        section("── DOWNTIME PARETO")
         if not pareto_df.empty:
-            story.append(Paragraph("── DOWNTIME PARETO", s_sc))
-            story.append(HRFlowable(width="100%", thickness=1, color=OR, spaceAfter=8))
-            pd2 = [["Machine","Total MTTR (h)","Part (%)","Cumul (%)"]]
-            for _, row in pareto_df.iterrows():
-                pd2.append([str(row["Machine"]),
-                             f"{float(row['MTTR_total_h']):.3f}",
-                             f"{float(row['Pct']):.1f}%",
-                             f"{float(row['Cumul']):.1f}%"])
-            pt2 = Table(pd2, colWidths=[(W-4*cm)/4]*4, repeatRows=1)
-            pt2.setStyle(TableStyle([
-                ("BACKGROUND",(0,0),(-1,0),NV), ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-                ("TEXTCOLOR",(0,0),(-1,0),WH),  ("FONTSIZE",(0,0),(-1,-1),9),
-                ("ALIGN",(0,0),(-1,-1),"CENTER"),("TOPPADDING",(0,0),(-1,-1),6),
-                ("BOTTOMPADDING",(0,0),(-1,-1),6),
-                ("BOX",(0,0),(-1,-1),0.5,HexColor("#EDE0D4")),
-                ("INNERGRID",(0,0),(-1,-1),0.3,HexColor("#F0E0D0")),
-                ("ROWBACKGROUNDS",(0,1),(-1,-1),[BC,WH]*20),
-            ]))
-            story.append(pt2)
-            story.append(Spacer(1, 14))
+            _bc = [TE_ORANGE if i<2 else TE_NAVY if i<4 else "#A8A8A8"
+                   for i in range(len(pareto_df))]
+            _fp = make_subplots(specs=[[{"secondary_y": True}]])
+            _fp.add_trace(go.Bar(
+                x=pareto_df["Machine"], y=pareto_df["MTTR_total_h"],
+                marker=dict(color=_bc, line=dict(width=0)),
+                text=[f"{v:.2f}h" for v in pareto_df["MTTR_total_h"]],
+                textposition="outside", hoverinfo="skip"),
+                secondary_y=False)
+            _fp.add_trace(go.Scatter(
+                x=pareto_df["Machine"], y=pareto_df["Cumul"],
+                mode="lines+markers",
+                line=dict(color="#C0392B", width=2.5),
+                marker=dict(size=8, color="#C0392B"),
+                hoverinfo="skip"),
+                secondary_y=True)
+            _fp.add_hline(y=80, line_dash="dot",
+                           line_color="#C0392B", line_width=1.5,
+                           secondary_y=True)
+            _fp.update_layout(
+                height=290, width=720, showlegend=False,
+                paper_bgcolor="white", plot_bgcolor="#FAFAFA",
+                margin=dict(l=44, r=44, t=16, b=44),
+                xaxis=dict(tickfont=dict(size=10), gridcolor="#F0E8E0"),
+                yaxis=dict(title="Downtime (h)", gridcolor="#F0E8E0",
+                           tickfont=dict(size=9)),
+                yaxis2=dict(title="Cumul (%)", range=[0,115],
+                             ticksuffix="%", tickfont=dict(size=9)))
+            insert_fig(_fp,
+                "Pareto Downtime — barres = MTTR cumulé · courbe rouge = % cumulé",
+                w_px=720, h_px=290)
 
-        # ── Qualified Stops (Shift + Key Failure + User ID) ──
-        if all(c in df_in.columns for c in ["Shift","Key Failure"]):
-            q_df = df_in[
-                (df_in["mttr_h"] > 0) &
-                df_in[["Shift","Key Failure"]].apply(
-                    lambda r: (str(r["Shift"]).strip() not in ("","None","nan") or
-                               str(r["Key Failure"]).strip() not in ("","None","nan")), axis=1)
+        # Pie
+        section("── CAUSE ANALYSIS")
+        _sc = df_in[COL_STATUS].value_counts().reset_index()
+        _sc.columns = ["Statut", "Nombre"]
+        _pie_c = {"PRODUCTION":"#27AE60","micro stops":"#E8650A",
+                  "Réparation Peripheri":"#C0392B","Réparation":"#C0392B"}
+        _fpi = go.Figure(go.Pie(
+            labels=_sc["Statut"], values=_sc["Nombre"], hole=0.55,
+            marker=dict(colors=[_pie_c.get(s,"#A8A8A8") for s in _sc["Statut"]],
+                        line=dict(color="white", width=3)),
+            textinfo="percent+label", textfont=dict(size=10),
+            hoverinfo="skip"))
+        _fpi.update_layout(
+            height=300, width=720, showlegend=True,
+            paper_bgcolor="white", plot_bgcolor="white",
+            margin=dict(l=20,r=20,t=20,b=20),
+            legend=dict(orientation="h", x=0, y=-0.15, font=dict(size=9)),
+            annotations=[dict(text=f"<b>{len(df_in):,}</b><br>events",
+                               x=0.5, y=0.5, showarrow=False,
+                               font=dict(size=13, color="#1B2A4A"))])
+        insert_fig(_fpi, "Répartition des statuts machine",
+                    w_px=720, h_px=300)
+        story.append(PageBreak())
+
+        # ══════════════════════════════════════════════════════════════════════
+        #  PAGE 3 — CRITICALITY MATRIX + AVAILABILITY TREND
+        # ══════════════════════════════════════════════════════════════════════
+
+        section("── CRITICALITY MATRIX  (MTTR vs MTBF)")
+        _ma_p = df_in.groupby(COL_MACHINE, as_index=False).agg(
+            tm=("mttr_h","sum"), tb=("mtbf_h","sum"),
+            nb_evt=(COL_STATUS,"count"))
+        _ma_p["dispo"] = _ma_p.apply(
+            lambda r: round(r.tb/(r.tb+r.tm)*100,1)
+            if (r.tb+r.tm)>0 else 100.0, axis=1)
+        _mx = _ma_p["tm"].max()*1.55 or 10
+        _my = _ma_p["tb"].max()*1.55 or 100
+        _midx, _midy = _mx/2, _my/2
+        _fmat = go.Figure()
+        for _x0,_y0,_x1,_y1,_c in [
+            (0,    _midy,_midx,_my,  "rgba(39,174,96,0.09)"),
+            (_midx,_midy,_mx,  _my,  "rgba(27,42,74,0.09)"),
+            (0,    0,    _midx,_midy,"rgba(230,126,34,0.09)"),
+            (_midx,0,    _mx,  _midy,"rgba(192,57,43,0.12)"),
+        ]:
+            _fmat.add_shape(type="rect",x0=_x0,y0=_y0,x1=_x1,y1=_y1,
+                             fillcolor=_c,line_width=0,layer="below")
+        for _txt,_x,_y,_tc in [
+            ("✅ RELIABLE",_midx*0.04,_my*0.97,"#27AE60"),
+            ("👁 WATCH",   _mx*0.54,  _my*0.97,"#1B2A4A"),
+            ("⚠ IMPROVE",  _midx*0.04,_my*0.47,"#F39C12"),
+            ("🔴 CRITICAL",_mx*0.54,  _my*0.47,"#C0392B"),
+        ]:
+            _fmat.add_annotation(x=_x,y=_y,text=_txt,showarrow=False,
+                font=dict(size=9,color=_tc),xanchor="left",yanchor="top")
+        _fmat.add_hline(y=_midy,line_dash="dot",line_color="#D4CFC9",line_width=1.5)
+        _fmat.add_vline(x=_midx,line_dash="dot",line_color="#D4CFC9",line_width=1.5)
+        for _i,_row in _ma_p.iterrows():
+            _c2=_PAL[_i%len(_PAL)]
+            _fmat.add_trace(go.Scatter(
+                x=[_row["tm"]],y=[_row["tb"]],
+                mode="markers+text",name=_row[COL_MACHINE],
+                text=[_row[COL_MACHINE]],textposition="top center",
+                textfont=dict(size=10,color=_c2),
+                marker=dict(size=min(52,max(20,int(_row["nb_evt"])*3)),
+                             color=_c2,opacity=0.88,
+                             line=dict(color="white",width=2.5)),
+                hoverinfo="skip"))
+        _fmat.update_layout(
+            height=340,width=720,showlegend=False,
+            paper_bgcolor="white",plot_bgcolor="#FAFAFA",
+            margin=dict(l=50,r=20,t=20,b=50),
+            xaxis=dict(title="Total MTTR (h)",range=[0,_mx],
+                       gridcolor="#F0E8E0",tickfont=dict(size=9),zeroline=False),
+            yaxis=dict(title="Total MTBF (h)",range=[0,_my],
+                       gridcolor="#F0E8E0",tickfont=dict(size=9),zeroline=False))
+        insert_fig(_fmat,
+            "Matrice de Criticité — Bas-droite = priorité TPM absolue",
+            w_px=720,h_px=340)
+
+        section("── ÉVOLUTION DE LA DISPONIBILITÉ QUOTIDIENNE")
+        if "date_only" in df_in.columns:
+            _da = df_in.groupby("date_only").agg(
+                mt=("mttr_h","sum"),mb=("mtbf_h","sum")).reset_index()
+            _da["dp"] = _da.apply(
+                lambda r: round(r.mb/(r.mb+r.mt)*100,1)
+                if (r.mb+r.mt)>0 else 100.0, axis=1)
+            _dm2 = df_in.groupby(["date_only",COL_MACHINE]).agg(
+                mt=("mttr_h","sum"),mb=("mtbf_h","sum")).reset_index()
+            _dm2["dp"] = _dm2.apply(
+                lambda r: round(r.mb/(r.mb+r.mt)*100,1)
+                if (r.mb+r.mt)>0 else 100.0, axis=1)
+            _fevo = go.Figure()
+            _fevo.add_trace(go.Scatter(
+                x=_da["date_only"],y=[95]*len(_da),
+                mode="lines",name="Cible 95%",
+                line=dict(color="#C0392B",dash="dot",width=1.5),
+                hoverinfo="skip"))
+            for _i2,_mac in enumerate(sorted(_dm2[COL_MACHINE].unique())):
+                _d2=_dm2[_dm2[COL_MACHINE]==_mac].sort_values("date_only")
+                _c3=_PAL[_i2%len(_PAL)]
+                _fevo.add_trace(go.Scatter(
+                    x=_d2["date_only"],y=_d2["dp"],
+                    mode="lines+markers",name=_mac,
+                    line=dict(color=_c3,width=1.8),
+                    marker=dict(size=5,color=_c3),
+                    hoverinfo="skip"))
+            _fevo.add_trace(go.Scatter(
+                x=_da["date_only"],y=_da["dp"],
+                mode="lines",name="▶ Global",
+                line=dict(color="#1B2A4A",width=3,dash="dot"),
+                hoverinfo="skip"))
+            _fevo.update_layout(
+                height=290,width=720,showlegend=True,
+                paper_bgcolor="white",plot_bgcolor="#FAFAFA",
+                margin=dict(l=44,r=16,t=16,b=52),
+                yaxis=dict(ticksuffix="%",range=[60,105],
+                           gridcolor="#F0E8E0",tickfont=dict(size=9),zeroline=False),
+                xaxis=dict(tickformat="%d/%m/%y",gridcolor="#F0E8E0",
+                           tickfont=dict(size=9),zeroline=False,tickangle=-35),
+                legend=dict(orientation="h",x=0,y=-0.25,font=dict(size=8)))
+            insert_fig(_fevo,
+                "Disponibilité quotidienne · pointillé navy = global · rouge = cible 95%",
+                w_px=720,h_px=290)
+        story.append(PageBreak())
+
+        # ══════════════════════════════════════════════════════════════════════
+        #  PAGE 4 — TREND ANALYSIS / ANALYSE DES TENDANCES
+        # ══════════════════════════════════════════════════════════════════════
+
+        story.append(Paragraph(
+            "TREND ANALYSIS / ANALYSE DES TENDANCES", S_SEC))
+        story.append(hr(thick=2))
+        story.append(Spacer(1, 0.1*cm))
+
+        _df_w, _df_m = _pdf_te_agg(df_in)
+
+        # ─ Choisir la vue la plus riche (hebdo si ≥2 semaines, sinon mensuel) ─
+        _has_week  = not _df_w.empty and len(_df_w) >= 2
+        _has_month = not _df_m.empty and len(_df_m) >= 2
+
+        for _view_lbl, _df_v, _has_v, _periode_col in [
+            ("Vue Hebdomadaire", _df_w, _has_week,  "Semaine"),
+            ("Vue Mensuelle",    _df_m, _has_month, "Mois"),
+        ]:
+            if not _has_v:
+                story.append(Paragraph(
+                    f"⚠ {_view_lbl} — données insuffisantes "
+                    f"(minimum 2 périodes requises).", S_CAP))
+                continue
+
+            story.append(Paragraph(_view_lbl, S_SSEC))
+            story.append(hr(color=C_NAVY, thick=0.8))
+
+            # ── Graphique 1 : Disponibilité ────────────────────────────────
+            insert_fig(
+                _make_trend_fig(_df_v, "dispo",
+                                f"Disponibilité (%) — {_view_lbl}",
+                                "#27AE60", target=95, h_px=250),
+                f"Disponibilité {_view_lbl.lower()} · "
+                "Ligne rouge pointillée = cible 95%",
+                w_px=720, h_px=250)
+
+            # ── Graphique 2 : MTTR ─────────────────────────────────────────
+            insert_fig(
+                _make_trend_fig(_df_v, "mttr_h",
+                                f"MTTR total (h) — {_view_lbl}",
+                                "#E8650A", h_px=230),
+                f"MTTR cumulé {_view_lbl.lower()} · "
+                "Plus bas = meilleures réparations",
+                w_px=720, h_px=230)
+
+            # ── Graphique 3 : MTBF ─────────────────────────────────────────
+            if has_mtbf:
+                insert_fig(
+                    _make_trend_fig(_df_v, "mtbf_h",
+                                    f"MTBF total (h) — {_view_lbl}",
+                                    "#1B2A4A", h_px=230),
+                    f"MTBF cumulé {_view_lbl.lower()} · "
+                    "Plus haut = meilleure fiabilité",
+                    w_px=720, h_px=230)
+
+            # ── Tableau récap ──────────────────────────────────────────────
+            story.append(Spacer(1, 0.2*cm))
+            story.append(Paragraph(
+                f"Tableau récapitulatif — {_view_lbl}", S_SSEC))
+            story.append(_recap_pdf_table(_df_v, _periode_col))
+            story.append(Spacer(1, 0.4*cm))
+
+        story.append(PageBreak())
+
+        # ══════════════════════════════════════════════════════════════════════
+        #  PAGE 5 — SUMMARY TABLE BY MACHINE + PARETO DÉTAIL
+        # ══════════════════════════════════════════════════════════════════════
+
+        section("── SUMMARY TABLE BY MACHINE")
+        _hd_ma = [["Machine","MTTR Total (h)","MTBF Total (h)",
+                   "Événements","Disponibilité (%)"]]
+        _rows_ma = []
+        _ext_ma  = []
+        for _ri, _row in ma_table.iterrows():
+            _d = float(_row["Availability (%)"])
+            _rows_ma.append([
+                str(_row["Machine"]),
+                f"{float(_row['Total MTTR (h)']):.4f}",
+                f"{float(_row['Total MTBF (h)']):.2f}",
+                str(int(_row["Events"])),
+                f"{_d:.1f}%"])
+            _ri_t = len(_rows_ma)
+            _ebg  = (HexColor("#D5F5E3") if _d>=95
+                     else HexColor("#FDEBD0") if _d>=90
+                     else HexColor("#FADBD8"))
+            _etc  = (HexColor("#1E8449") if _d>=95
+                     else HexColor("#784212") if _d>=90
+                     else HexColor("#922B21"))
+            _ext_ma += [
+                ("BACKGROUND",(4,_ri_t),(4,_ri_t),_ebg),
+                ("TEXTCOLOR", (4,_ri_t),(4,_ri_t),_etc),
+                ("FONTNAME",  (4,_ri_t),(4,_ri_t),"Helvetica-Bold"),
             ]
-            if not q_df.empty:
-                story.append(Paragraph("── QUALIFIED STOPS — USER INPUT", s_sc))
-                story.append(HRFlowable(width="100%", thickness=1, color=OR, spaceAfter=8))
-                q_cols = [c for c in [COL_MACHINE, COL_DATE, COL_STATUS,
-                                       "Shift","Key Failure","User ID","mttr_h"] if c in q_df.columns]
-                q_hdrs = {COL_MACHINE:"Machine", COL_DATE:"Date",
-                           COL_STATUS:"Status", "Shift":"Shift",
-                           "Key Failure":"Key Failure", "User ID":"User ID", "mttr_h":"MTTR (h)"}
-                qd = [[q_hdrs.get(c,c) for c in q_cols]]
-                for _, row in q_df[q_cols].iterrows():
-                    rv = []
-                    for c in q_cols:
-                        v = row[c]
-                        if c == "mttr_h":
-                            rv.append(f"{float(v):.3f}" if pd.notna(v) else "—")
-                        elif c == COL_DATE:
-                            try:    rv.append(pd.to_datetime(v).strftime("%m/%d/%Y"))
-                            except: rv.append(str(v)[:10])
+        story.append(_tbl(_hd_ma+_rows_ma,
+                           [IW*x for x in [0.18,0.20,0.20,0.17,0.25]],
+                           fs=9, extras=_ext_ma))
+        story.append(Spacer(1, 0.3*cm))
+
+        if not pareto_df.empty:
+            section("── DOWNTIME PARETO — DÉTAIL")
+            _hd_p  = [["Machine","MTTR Total (h)","Part (%)","Cumul (%)"]]
+            _rows_p = [[str(r["Machine"]),
+                         f"{float(r['MTTR_total_h']):.3f}",
+                         f"{float(r['Pct']):.1f}%",
+                         f"{float(r['Cumul']):.1f}%"]
+                        for _,r in pareto_df.iterrows()]
+            story.append(_tbl(_hd_p+_rows_p,
+                               [IW*x for x in [0.30,0.28,0.21,0.21]],
+                               fs=9))
+        story.append(PageBreak())
+
+        # ══════════════════════════════════════════════════════════════════════
+        #  PAGE 6 — DONNÉES QUALIFIÉES
+        # ══════════════════════════════════════════════════════════════════════
+
+        section("── DONNÉES QUALIFIÉES — SAISIE TECHNICIEN")
+
+        if all(c in df_in.columns for c in ["Shift","Key Failure"]):
+            def _nb(v): return str(v).strip() not in ("","None","nan")
+            _qdf = df_in[
+                (df_in["mttr_h"]>0) &
+                df_in[["Shift","Key Failure"]].apply(
+                    lambda r: _nb(r["Shift"]) or _nb(r["Key Failure"]),
+                    axis=1)]
+            if not _qdf.empty:
+                _qcols = [c for c in [COL_MACHINE,COL_DATE,COL_STATUS,
+                                       "User ID","Shift","Key Failure","mttr_h"]
+                           if c in _qdf.columns]
+                _qmap  = {COL_MACHINE:"Machine",COL_DATE:"Date",
+                           COL_STATUS:"Statut","User ID":"User ID",
+                           "Shift":"Shift","Key Failure":"Key Failure",
+                           "mttr_h":"MTTR (h)"}
+                _hd_q  = [[_qmap.get(c,c) for c in _qcols]]
+                _rows_q = []
+                for _,_row in _qdf[_qcols].iterrows():
+                    _rv=[]
+                    for _c in _qcols:
+                        _v=_row[_c]
+                        if _c=="mttr_h":
+                            _rv.append(f"{float(_v):.3f}" if pd.notna(_v) else "—")
+                        elif _c==COL_DATE:
+                            try:    _rv.append(pd.to_datetime(_v).strftime("%m/%d/%Y"))
+                            except: _rv.append(str(_v)[:10])
                         else:
-                            rv.append(str(v) if pd.notna(v) else "—")
-                    qd.append(rv)
-                qcw = [(W-4*cm)/len(q_cols)]*len(q_cols)
-                qtbl = Table(qd, colWidths=qcw, repeatRows=1)
-                qtbl.setStyle(TableStyle([
-                    ("BACKGROUND",(0,0),(-1,0),BH), ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-                    ("TEXTCOLOR",(0,0),(-1,0),WH),  ("FONTSIZE",(0,0),(-1,-1),7),
-                    ("ALIGN",(0,0),(-1,-1),"CENTER"),("TOPPADDING",(0,0),(-1,-1),4),
-                    ("BOTTOMPADDING",(0,0),(-1,-1),4),
-                    ("BOX",(0,0),(-1,-1),0.5,HexColor("#EDE0D4")),
-                    ("INNERGRID",(0,0),(-1,-1),0.3,HexColor("#F0E0D0")),
-                    ("ROWBACKGROUNDS",(0,1),(-1,-1),[BC,WH]*200),
-                ]))
-                story.append(qtbl)
+                            _s=str(_v) if pd.notna(_v) else "—"
+                            _rv.append(_s[:34]+"…" if len(_s)>35 else _s)
+                    _rows_q.append(_rv)
+                story.append(Paragraph(
+                    f"{len(_rows_q)} arrêt(s) qualifié(s) sur la période.",
+                    S_BODY))
+                story.append(Spacer(1,0.15*cm))
+                story.append(_tbl(_hd_q+_rows_q,
+                                   [IW/len(_qcols)]*len(_qcols),
+                                   fs=7))
+            else:
+                story.append(Paragraph(
+                    "Aucun arrêt qualifié pour la période sélectionnée.",
+                    S_BODY))
+        else:
+            story.append(Paragraph(
+                "Colonnes Shift / Key Failure non disponibles.", S_BODY))
+
+        # ══════════════════════════════════════════════════════════════════════
+        #  FOOTER + BUILD
+        # ══════════════════════════════════════════════════════════════════════
 
         def add_footer(canvas_obj, doc):
             canvas_obj.saveState()
             canvas_obj.setFont("Helvetica", 7)
-            canvas_obj.setFillColor(BR)
-            canvas_obj.drawCentredString(W/2, 1.5*cm,
-                f"≡ TE CONNECTIVITY · STAMPING DEPT · TANGIER   |   "
-                f"TPM KPI DASHBOARD   |   {datetime.now().strftime('%m/%d/%Y')}   |   "
+            canvas_obj.setFillColorRGB(0.63, 0.47, 0.34)
+            canvas_obj.drawCentredString(
+                W/2, 1.35*cm,
+                f"≡ TE CONNECTIVITY  ·  STAMPING DEPT  ·  TANGIER     |     "
+                f"TPM KPI DASHBOARD     |     "
+                f"{datetime.now().strftime('%d/%m/%Y')}     |     "
                 f"Page {doc.page}")
-            canvas_obj.setStrokeColor(OR)
-            canvas_obj.setLineWidth(1.5)
-            canvas_obj.line(2*cm, 2*cm, W-2*cm, 2*cm)
+            canvas_obj.setStrokeColorRGB(0.91, 0.40, 0.04)
+            canvas_obj.setLineWidth(1.2)
+            canvas_obj.line(MARGIN, 1.85*cm, W-MARGIN, 1.85*cm)
             canvas_obj.restoreState()
 
-        doc = SimpleDocTemplate(buf_pdf, pagesize=A4,
-                                leftMargin=2*cm, rightMargin=2*cm,
-                                topMargin=1.8*cm, bottomMargin=2.8*cm)
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            leftMargin=MARGIN, rightMargin=MARGIN,
+            topMargin=1.4*cm,  bottomMargin=2.5*cm)
         doc.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
-        return buf_pdf.getvalue()
+        return buf.getvalue()
 
     ec1, ec2, ec3 = st.columns(3)
     with ec1:
@@ -2000,6 +2520,161 @@ with tab_qual:
                 key="btn_save_qual",
                 help="Valider et sauvegarder les saisies du tableau ci-dessus")
 
+        # ── Bouton Export Excel — données complètes session_state ────────────
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+
+        # Prépare le fichier Excel en mémoire depuis session_state
+        def _build_excel_export():
+            """
+            Génère un .xlsx complet depuis session_state.edited_df.
+            Feuille 1 : TOUTES les lignes, colonnes Hydra + User ID / Shift / Key Failure.
+            Feuille 2 : Uniquement les arrêts (mttr_h > 0), colonnes lisibles.
+            """
+            from openpyxl.styles import (Font, PatternFill, Alignment,
+                                          Border, Side)
+
+            _src = st.session_state.edited_df.copy()
+
+            # ── Colonnes internes à masquer (jamais exportées) ────────────────
+            _INTERNAL = {"mttr_h", "mtbf_h", "date_only",
+                         "_sort_key", "_month_num", "_month_year",
+                         "_month_year_n", "_week_num", "_week_year_n",
+                         "_month_lbl", "_week_lbl", "_week_year"}
+
+            # ── Nettoyage colonnes qualification ─────────────────────────────
+            for _c in ["User ID", "Shift", "Key Failure"]:
+                if _c in _src.columns:
+                    _src[_c] = (_src[_c].fillna("")
+                                        .astype(str)
+                                        .str.strip()
+                                        .replace({"nan": "", "None": ""}))
+
+            # ── Colonne MTTR lisible (en heures, arrondie) ────────────────────
+            if "mttr_h" in _src.columns:
+                _src["MTTR (h)"] = _src["mttr_h"].round(4)
+            if "mtbf_h" in _src.columns:
+                _src["MTBF (h)"] = _src["mtbf_h"].round(3)
+
+            # ── Colonne Date : convertir en date Python pure (plus de ####) ───
+            if COL_DATE in _src.columns:
+                _parsed = pd.to_datetime(_src[COL_DATE], errors="coerce")
+                _src[COL_DATE] = _parsed.dt.strftime("%m/%d/%Y").fillna("")
+
+            # ── Ordre des colonnes : Hydra visible | MTTR | MTBF | Qualification
+            _hydra_base = [c for c in _src.columns
+                           if c not in _INTERNAL
+                           and c not in ["User ID", "Shift", "Key Failure",
+                                         "MTTR (h)", "MTBF (h)"]]
+            _metric_cols = [c for c in ["MTTR (h)", "MTBF (h)"]
+                            if c in _src.columns]
+            _qual_cols   = [c for c in ["User ID", "Shift", "Key Failure"]
+                            if c in _src.columns]
+            _all_cols    = _hydra_base + _metric_cols + _qual_cols
+
+            # ── Helper style ──────────────────────────────────────────────────
+            def _style_sheet(ws, df_data, header_color="1B2A4A",
+                              zebra_color="F7F4F0"):
+                """Applique header foncé + alternance de lignes + bordures."""
+                _hdr_font    = Font(bold=True, color="FFFFFF",
+                                    name="Calibri", size=10)
+                _hdr_fill    = PatternFill("solid",
+                                           fgColor=header_color)
+                _hdr_align   = Alignment(horizontal="center",
+                                          vertical="center", wrap_text=True)
+                _zebra_fill  = PatternFill("solid", fgColor=zebra_color)
+                _thin        = Side(style="thin", color="D0C0B0")
+                _border      = Border(left=_thin, right=_thin,
+                                       top=_thin, bottom=_thin)
+
+                # Header row
+                for cell in ws[1]:
+                    cell.font      = _hdr_font
+                    cell.fill      = _hdr_fill
+                    cell.alignment = _hdr_align
+                    cell.border    = _border
+                ws.row_dimensions[1].height = 30
+
+                # Data rows
+                for row_idx, row in enumerate(ws.iter_rows(
+                        min_row=2, max_row=ws.max_row), start=2):
+                    _fill = (_zebra_fill if row_idx % 2 == 0
+                             else PatternFill())
+                    for cell in row:
+                        cell.fill      = _fill
+                        cell.border    = _border
+                        cell.alignment = Alignment(vertical="center")
+
+                # Largeur auto
+                for col_cells in ws.columns:
+                    _w = max((len(str(c.value or "")) for c in col_cells),
+                              default=8)
+                    ws.column_dimensions[
+                        col_cells[0].column_letter].width = min(_w + 3, 45)
+
+                # Freeze header
+                ws.freeze_panes = "A2"
+
+            _buf = io.BytesIO()
+            with pd.ExcelWriter(_buf, engine="openpyxl",
+                                 datetime_format="MM/DD/YYYY") as _writer:
+
+                # ── FEUILLE 1 : Données complètes ─────────────────────────────
+                _df_full = _src[_all_cols].copy()
+                _df_full.to_excel(_writer,
+                                   sheet_name="Données Complètes",
+                                   index=False)
+                _style_sheet(_writer.sheets["Données Complètes"],
+                              _df_full, header_color="1B2A4A")
+
+                # ── FEUILLE 2 : Arrêts qualifiés ──────────────────────────────
+                _mask_stops = (_src["mttr_h"] > 0
+                               if "mttr_h" in _src.columns
+                               else pd.Series(True, index=_src.index))
+                _stops = _src[_mask_stops].copy()
+
+                _stops_cols = [c for c in [
+                    COL_MACHINE, COL_DATE, COL_STATUS,
+                    "MTTR (h)", "User ID", "Shift", "Key Failure"
+                ] if c in _stops.columns]
+
+                # Marquer les lignes non qualifiées
+                def _mark_qual(r):
+                    return (str(r.get("Shift","")).strip() not in
+                            ("","nan","None") or
+                            str(r.get("Key Failure","")).strip() not in
+                            ("","nan","None"))
+
+                _stops["Qualifié"] = _stops[_stops_cols].apply(
+                    _mark_qual, axis=1).map({True: "✅ Oui", False: "⬜ Non"})
+                _stops2_cols = _stops_cols + ["Qualifié"]
+
+                _stops[_stops2_cols].to_excel(
+                    _writer, sheet_name="Arrêts (stops)", index=False)
+                _style_sheet(_writer.sheets["Arrêts (stops)"],
+                              _stops[_stops2_cols],
+                              header_color="E8650A")
+
+            _buf.seek(0)
+            return _buf.read()
+
+        _ex_left, _ex_mid, _ex_right = st.columns([1.5, 2, 1.5])
+        with _ex_mid:
+            try:
+                _excel_bytes = _build_excel_export()
+                _ts_xl = datetime.now().strftime("%Y%m%d_%H%M")
+                st.download_button(
+                    label="📥  EXPORTER LA DATA QUALIFIÉE (EXCEL)",
+                    data=_excel_bytes,
+                    file_name=f"TE_Qualification_{_ts_xl}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument"
+                         ".spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="btn_export_excel",
+                    help="Télécharge toutes les données + User ID / Shift / Key Failure"
+                )
+            except Exception as _ex_err:
+                st.warning(f"⚠ Export Excel indisponible : {_ex_err}")
+
         # ── Persistance : uniquement au clic Enregistrer ─────────────────────
         if _save_clicked and _edited is not None:
             _n_saved = 0
@@ -2065,26 +2740,56 @@ with tab_qual:
                 </div>
                 """, unsafe_allow_html=True)
 
-    # ── Export des arrêts qualifiés ───────────────────────────────────────────
+    # ── Section export récap (sous le tableau) ───────────────────────────────
     if _qual_n > 0:
-        st.markdown(f'<div class="te-section">Export des Arrêts Qualifiés</div>',
+        st.markdown(f'<div class="te-section">Synthèse des Arrêts Qualifiés</div>',
                     unsafe_allow_html=True)
+
         _q_all = df[df[["Shift","Key Failure"]].apply(_is_qualified, axis=1)]
+        _ts    = datetime.now().strftime("%Y%m%d_%H%M")
+
+        # Métriques rapides
+        _qm1, _qm2, _qm3 = st.columns(3)
+        with _qm1:
+            st.metric("✅ Arrêts qualifiés", f"{_qual_n} / {_stop_n}",
+                      delta=f"{_pct_q:.0f}% du total")
+        with _qm2:
+            _uid_n = int((_q_all.get("User ID", pd.Series(dtype=str))
+                           .astype(str).str.strip()
+                           .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
+                           .notna()).sum())
+            st.metric("👤 Avec User ID", f"{_uid_n} lignes",
+                      delta="signées" if _uid_n > 0 else "aucune")
+        with _qm3:
+            _kf_n = int((_q_all.get("Key Failure", pd.Series(dtype=str))
+                          .astype(str).str.strip()
+                          .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
+                          .notna()).sum())
+            st.metric("🔧 Key Failure renseignée", f"{_kf_n} lignes")
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+        # Export CSV arrêts qualifiés uniquement
         _q_exp_cols = [c for c in [
             COL_MACHINE, COL_DATE, COL_STATUS,
             "mttr_h", "User ID", "Shift", "Key Failure"
         ] if c in _q_all.columns]
-        _ts = datetime.now().strftime("%Y%m%d_%H%M")
-        _xc1, _xc2 = st.columns(2)
-        with _xc1:
+
+        _ec1, _ec2 = st.columns(2)
+        with _ec1:
             st.download_button(
                 f"⬇ CSV — {_qual_n} ARRÊTS QUALIFIÉS",
-                data=_q_all[_q_exp_cols].to_csv(index=False, sep=";").encode("utf-8"),
+                data=_q_all[_q_exp_cols].to_csv(
+                    index=False, sep=";").encode("utf-8"),
                 file_name=f"TE_arrets_qualifies_{_ts}.csv",
-                mime="text/csv", use_container_width=True)
-        with _xc2:
-            st.info(f"📄 **{_qual_n}** arrêts qualifiés — le rapport PDF complet "
-                    f"(avec ce tableau) est disponible dans l'onglet **📊 KPIs**.")
+                mime="text/csv",
+                use_container_width=True,
+                help="Export CSV des arrêts qualifiés uniquement")
+        with _ec2:
+            st.info(f"📄 **{_qual_n}** arrêts qualifiés · "
+                    f"Le rapport PDF complet est disponible dans l'onglet **📊 KPIs** · "
+                    f"L'export Excel complet (toutes données + qualif) "
+                    f"est disponible via le bouton **📥 EXCEL** ci-dessus.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  FOOTER
