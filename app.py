@@ -1,14 +1,11 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║  TE Connectivity — Stamping Department                                   ║
-║  TPM Maintenance KPI Dashboard — Full Version                       ║
-║  Bruderer Presses S-001 → S-006 + Peripherals                         ║
+║  TPM Maintenance KPI Dashboard                                           ║
+║  Bruderer Presses S-001 → S-006 + Peripherals                           ║
 ║                                                                          ║
-║  INSTALLATION:                                                           ║
-║    pip install streamlit plotly pandas openpyxl numpy kaleido           ║
-║                                                                          ║
-║  RUN:                                                                    ║
-║    streamlit run app.py                                                  ║
+║  INSTALL : pip install streamlit plotly pandas openpyxl numpy kaleido   ║
+║  RUN     : streamlit run app.py                                          ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -20,6 +17,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, date, timedelta
 import io
+import os
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -41,8 +39,101 @@ COL_STATUS    = "machine_status_name"
 COL_DATE      = "plant_shift_date"
 COL_MTTR      = "Sum of mttr_workcenter_numerator_seconds_quantity"
 COL_MTBF      = "Sum of mtbf_numerator_seconds_quantity"
-COL_PROD      = "hydra_bmk_production_status_name"   # optionnel
+COL_PROD      = "hydra_bmk_production_status_name"
 REQUIRED_COLS = [COL_MACHINE, COL_STATUS, COL_MTTR, COL_MTBF]
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PERSISTANCE — fichier CSV local
+# ─────────────────────────────────────────────────────────────────────────────
+PERSIST_FILE = "tpm_data_persistent.csv"
+
+# Colonnes de qualification (saisies par les techniciens)
+QUAL_COLS = [
+    "User ID", "Shift", "Key Failure",
+    "Issue Description", "Action Taken",
+    "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
+]
+
+# Colonnes internes (ne pas persister)
+INTERNAL_COLS = {
+    "mttr_h", "mtbf_h", "date_only",
+    "_sort_key", "_month_num", "_month_year",
+    "_month_year_n", "_week_num", "_week_year_n",
+    "_month_lbl", "_week_lbl", "_week_year",
+}
+
+
+def save_to_disk(df: pd.DataFrame) -> bool:
+    """Save st.session_state.edited_df to tpm_data_persistent.csv.
+    Drops internal computed columns before writing.
+    Returns True on success."""
+    try:
+        _export = df.drop(
+            columns=[c for c in INTERNAL_COLS if c in df.columns],
+            errors="ignore"
+        ).copy()
+        # Convert timestamps → strings
+        for _c in _export.columns:
+            if pd.api.types.is_datetime64_any_dtype(_export[_c]):
+                _export[_c] = _export[_c].dt.strftime("%m/%d/%Y").fillna("")
+        _export.to_csv(PERSIST_FILE, index=False, encoding="utf-8-sig")
+        return True
+    except Exception as _e:
+        st.warning(f"⚠ Could not save to disk: {_e}")
+        return False
+
+
+def load_from_disk() -> pd.DataFrame:
+    """Load tpm_data_persistent.csv if it exists. Returns empty df otherwise."""
+    if os.path.exists(PERSIST_FILE):
+        try:
+            return pd.read_csv(PERSIST_FILE, encoding="utf-8-sig", low_memory=False)
+        except Exception:
+            return pd.DataFrame()
+    return pd.DataFrame()
+
+
+def merge_qualifications(df_new: pd.DataFrame,
+                          df_saved: pd.DataFrame) -> pd.DataFrame:
+    """Merge qualification columns from a saved file onto a new Hydra upload.
+    Match key = (machine_id, plant_shift_date, machine_status_name).
+    If a row in df_new matches a saved row, its qualification columns are
+    copied across.  New rows not in df_saved stay with blank qualifications."""
+    if df_saved.empty:
+        return df_new
+
+    _MATCH_KEYS = [COL_MACHINE, COL_DATE, COL_STATUS]
+    _keys_present = [k for k in _MATCH_KEYS if k in df_saved.columns and k in df_new.columns]
+    if not _keys_present:
+        return df_new
+
+    _qual_in_saved = [c for c in QUAL_COLS if c in df_saved.columns]
+    if not _qual_in_saved:
+        return df_new
+
+    _saved_q = df_saved[_keys_present + _qual_in_saved].copy()
+    # Normalise key cols to string for matching
+    for _k in _keys_present:
+        _saved_q[_k] = _saved_q[_k].astype(str).str.strip()
+
+    _merged = df_new.copy()
+    for _c in QUAL_COLS:
+        if _c not in _merged.columns:
+            _merged[_c] = "" if _c not in ["Qty","Unit Price (€)","Total Part Cost"] else 0.0
+
+    # Build a lookup dict: tuple(key values) → {col: value}
+    _lookup = {}
+    for _, _row in _saved_q.iterrows():
+        _key = tuple(str(_row[k]).strip() for k in _keys_present)
+        _lookup[_key] = {c: _row[c] for c in _qual_in_saved}
+
+    for _idx, _row in _merged.iterrows():
+        _key = tuple(str(_row[k]).strip() if k in _merged.columns else "" for k in _keys_present)
+        if _key in _lookup:
+            for _c, _v in _lookup[_key].items():
+                _merged.at[_idx, _c] = _v
+
+    return _merged
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  COULEURS TE CONNECTIVITY
@@ -64,9 +155,14 @@ TE_AMBER   = "#E67E22"
 PALETTE = [TE_ORANGE, TE_NAVY, TE_RED, "#8E44AD", TE_GREEN, "#16A085", "#D4AC0D", TE_ORANGE2]
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  CSS GLOBAL
+#  CSS GLOBAL — injected once via cache_resource
 # ─────────────────────────────────────────────────────────────────────────────
-st.markdown(f"""
+@st.cache_resource
+def _inject_css(te_orange, te_dark, te_black, te_navy, te_brown,
+                te_bg, te_white, te_green, te_red, te_amber,
+                te_orange2, te_orange3):
+    """Build and return the CSS string. Evaluated once, cached permanently."""
+    return f"""<style>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
@@ -78,16 +174,6 @@ html, body, .stApp {{
 }}
 #MainMenu, footer, header {{ visibility: hidden; }}
 .block-container {{ padding-top: 0 !important; max-width: 100% !important; }}
-
-/* ── MASQUER keyboard_double_arrow — remplacer par signe CSS ── */
-[data-testid="collapsedControl"] span {{
-    font-size: 0 !important;
-    color: transparent !important;
-    visibility: hidden !important;
-    width: 0 !important;
-    height: 0 !important;
-    display: none !important;
-}}
 
 /* ── SIDEBAR — toujours visible + thème sombre ── */
 [data-testid="stSidebar"] {{
@@ -495,8 +581,15 @@ section[data-testid="stSidebar"] [data-testid="stDateInput"] input::placeholder 
 ::-webkit-scrollbar-track {{ background: #F0EAE3; }}
 ::-webkit-scrollbar-thumb {{ background: {TE_ORANGE3}; border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {TE_ORANGE}; }}
-</style>
-""", unsafe_allow_html=True)
+</style>"""
+
+# Call once — result is cached; subsequent reruns skip this entirely
+st.markdown(_inject_css(
+    TE_ORANGE, TE_DARK, TE_BLACK, TE_NAVY, TE_BROWN,
+    TE_BG, TE_WHITE, TE_GREEN, TE_RED, TE_AMBER,
+    TE_ORANGE2, TE_ORANGE3),
+    unsafe_allow_html=True)
+
 
 # ── JS : remplacer "keyboard_double_arrow_left/right" par "‹" / "›" ──
 st.markdown("""
@@ -522,6 +615,7 @@ obs.observe(document.body, {childList:true, subtree:true});
 </script>
 """, unsafe_allow_html=True)
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  LISTES DÉROULANTES — Editable Table
 # ─────────────────────────────────────────────────────────────────────────────
@@ -541,17 +635,18 @@ KEY_FAILURES = [
 ]
 
 
-def load_data(f) -> pd.DataFrame:
-    """Read CSV (auto-detect separator) or Excel. Clean column names."""
-    name = f.name.lower()
+@st.cache_data(show_spinner="📂 Loading data…")
+def load_data(raw_bytes: bytes, file_name: str) -> pd.DataFrame:
+    """Read CSV or Excel from raw bytes. Cached by file content hash."""
     try:
+        name = file_name.lower()
         if name.endswith(".csv"):
-            raw = f.read()
-            sample = raw[:2048].decode("utf-8", errors="replace")
+            sample = raw_bytes[:2048].decode("utf-8", errors="replace")
             sep = ";" if sample.count(";") >= sample.count(",") else ","
-            df = pd.read_csv(io.BytesIO(raw), sep=sep, encoding="utf-8", on_bad_lines="skip")
+            df = pd.read_csv(io.BytesIO(raw_bytes), sep=sep,
+                             encoding="utf-8", on_bad_lines="skip")
         else:
-            df = pd.read_excel(f)
+            df = pd.read_excel(io.BytesIO(raw_bytes))
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except Exception as e:
@@ -707,11 +802,11 @@ def apply(fig, **kw):
     return fig
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  SIDEBAR — toujours visible : Import + Filtres
+#  SIDEBAR — Logo + Navigation + File Upload + Filters
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
 
-    # Logo
+    # ── Logo ──────────────────────────────────────────────────────────────────
     st.markdown(f"""
     <div style="background:rgba(232,101,10,0.12);border:1px solid rgba(232,101,10,0.35);
                 border-radius:10px;padding:12px 14px;margin-bottom:16px">
@@ -726,10 +821,25 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Import Data ──
-    st.markdown('<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
-                f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                '📂 IMPORT DATA</p>', unsafe_allow_html=True)
+    # ── Navigation (Dashboard / Historique) ───────────────────────────────────
+    st.markdown(f'''<p style="font-size:9px;font-weight:700;letter-spacing:3px;
+text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">🗂 NAVIGATION</p>''',
+        unsafe_allow_html=True)
+
+    _nav = st.radio(
+        "Navigation",
+        options=["📊 Dashboard", "📜 Historique"],
+        index=0,
+        key="nav_mode",
+        label_visibility="collapsed",
+    )
+
+    st.markdown("---")
+
+    # ── Import Data ───────────────────────────────────────────────────────────
+    st.markdown(f'''<p style="font-size:9px;font-weight:700;letter-spacing:3px;
+text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">📂 IMPORT DATA</p>''',
+        unsafe_allow_html=True)
 
     uploaded = st.file_uploader(
         "",
@@ -738,16 +848,202 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
+    # Show persist file status
+    _persist_exists = os.path.exists(PERSIST_FILE)
+    if _persist_exists:
+        try:
+            _p_size = os.path.getsize(PERSIST_FILE)
+            _p_rows = sum(1 for _ in open(PERSIST_FILE, encoding="utf-8-sig")) - 1
+            st.markdown(
+                f'''<div style="font-size:9px;font-family:JetBrains Mono,monospace;
+color:#27AE60;padding:4px 0;line-height:1.7">
+💾 {_p_rows:,} rows saved<br>→ tpm_data_persistent.csv</div>''',
+                unsafe_allow_html=True)
+        except Exception:
+            pass
+
     st.markdown("---")
 
-    # ── Filtres (seulement si fichier chargé) ──
+    # ── Filtres (seulement si fichier chargé) ─────────────────────────────────
     if uploaded is not None:
-        st.markdown('<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
-                    f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                    '🔧 FILTERS</p>', unsafe_allow_html=True)
+        st.markdown(f'''<p style="font-size:9px;font-weight:700;letter-spacing:3px;
+text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">🔧 FILTERS</p>''',
+            unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  ÉCRAN D'ACCUEIL — si aucun fichier
+#  HISTORIQUE PAGE (nav == Historique)
+# ─────────────────────────────────────────────────────────────────────────────
+if _nav == "📜 Historique":
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,{TE_BLACK} 0%,#2A1A0A 100%);
+                border:2px solid {TE_ORANGE};border-radius:14px;
+                padding:20px 28px;margin-bottom:18px;
+                display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;
+                    font-weight:800;color:{TE_ORANGE};letter-spacing:2px">
+          📜 HISTORIQUE DES ARRÊTS QUALIFIÉS
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;
+                    color:rgba(255,255,255,0.5);margin-top:4px">
+          Données lues depuis tpm_data_persistent.csv · sauvegarde locale permanente
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _hist_df = load_from_disk()
+
+    if _hist_df.empty:
+        st.info("📭 Aucun historique disponible. "
+                "Chargez un fichier Hydra, saisissez des qualifications "
+                "et cliquez sur 💾 SAVE CHANGES pour créer l'historique.")
+    else:
+        # Filter to qualified stops only (have at least Shift or Key Failure)
+        _qual_mask = pd.Series([False] * len(_hist_df), index=_hist_df.index)
+        for _qc in ["Shift", "Key Failure", "Issue Description", "Action Taken"]:
+            if _qc in _hist_df.columns:
+                _qual_mask = _qual_mask | (
+                    _hist_df[_qc].astype(str).str.strip()
+                    .replace({"":"no","nan":"no","None":"no"}).ne("no")
+                )
+        # Also include rows with Qty > 0
+        if "Qty" in _hist_df.columns:
+            _qual_mask = _qual_mask | (
+                pd.to_numeric(_hist_df["Qty"], errors="coerce").fillna(0) > 0)
+
+        _hist_qual = _hist_df[_qual_mask].copy() if _qual_mask.any() else _hist_df.copy()
+
+        # ── Summary metrics ──────────────────────────────────────────────────
+        _total_rows_h   = len(_hist_df)
+        _qual_rows_h    = len(_hist_qual)
+        _cost_h         = float(pd.to_numeric(
+            _hist_df.get("Total Part Cost", pd.Series([0])),
+            errors="coerce").fillna(0).sum()) if "Total Part Cost" in _hist_df.columns else 0.0
+        _machines_h     = _hist_df[COL_MACHINE].nunique() if COL_MACHINE in _hist_df.columns else 0
+
+        _hm1, _hm2, _hm3, _hm4 = st.columns(4)
+        with _hm1: st.metric("📋 Total Events",    f"{_total_rows_h:,}")
+        with _hm2: st.metric("✅ Qualified Stops", f"{_qual_rows_h:,}")
+        with _hm3: st.metric("🏭 Machines",        f"{_machines_h}")
+        with _hm4: st.metric("💰 Total Cost",      f"€ {_cost_h:,.2f}")
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+        # ── Filter controls ──────────────────────────────────────────────────
+        _hf1, _hf2, _hf3 = st.columns(3)
+        with _hf1:
+            _hmachines = ["All"] + sorted(
+                _hist_qual[COL_MACHINE].dropna().unique().tolist()
+            ) if COL_MACHINE in _hist_qual.columns else ["All"]
+            _hfilt_mac = st.selectbox("🏭 Machine", _hmachines, key="hist_mac")
+        with _hf2:
+            _hfilt_kf_opts = ["All"] + sorted(
+                _hist_qual["Key Failure"].dropna().replace({"":"(blank)","nan":"(blank)"}).unique().tolist()
+            ) if "Key Failure" in _hist_qual.columns else ["All"]
+            _hfilt_kf = st.selectbox("🔧 Key Failure", _hfilt_kf_opts, key="hist_kf")
+        with _hf3:
+            _hfilt_user_opts = ["All"] + sorted(
+                _hist_qual["User ID"].dropna().replace({"TE":"","":"(blank)"}).unique().tolist()
+            ) if "User ID" in _hist_qual.columns else ["All"]
+            _hfilt_user = st.selectbox("👤 User ID", ["All"] + sorted(
+                _hist_qual["User ID"].astype(str).str.strip()
+                .replace({"":"(blank)","nan":"(blank)"}).unique().tolist()
+            ) if "User ID" in _hist_qual.columns else ["All"], key="hist_uid")
+
+        _h_disp = _hist_qual.copy()
+        if _hfilt_mac  != "All" and COL_MACHINE in _h_disp.columns:
+            _h_disp = _h_disp[_h_disp[COL_MACHINE] == _hfilt_mac]
+        if _hfilt_kf   != "All" and "Key Failure" in _h_disp.columns:
+            _h_disp = _h_disp[_h_disp["Key Failure"].astype(str).str.strip() == _hfilt_kf]
+        if _hfilt_user != "All" and "User ID" in _h_disp.columns:
+            _h_disp = _h_disp[_h_disp["User ID"].astype(str).str.strip() == _hfilt_user]
+
+        # ── Display columns ──────────────────────────────────────────────────
+        _hist_show_cols = [c for c in [
+            COL_MACHINE, COL_DATE, COL_STATUS,
+            "User ID", "Shift", "Key Failure",
+            "Issue Description", "Action Taken",
+            "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
+        ] if c in _h_disp.columns]
+
+        st.markdown(f'''<div style="font-family:JetBrains Mono,monospace;font-size:9px;
+color:#9A7A60;margin-bottom:6px;letter-spacing:1px">
+Showing <strong style="color:{TE_ORANGE}">{len(_h_disp):,}</strong> qualified stop(s)
+{"· filter active" if (_hfilt_mac != "All" or _hfilt_kf != "All" or _hfilt_user != "All") else ""}
+</div>''', unsafe_allow_html=True)
+
+        # Style dispo column
+        def _style_kf(val):
+            if str(val).strip() in ("","nan","None","(blank)"): return "color:#CCCCCC"
+            return "color:#E8650A;font-weight:700"
+
+        if _hist_show_cols:
+            _h_styled = _h_disp[_hist_show_cols].copy()
+            # Colour Key Failure
+            _kf_subset = [c for c in ["Key Failure"] if c in _h_styled.columns]
+            try:
+                st.dataframe(
+                    _h_styled.style.applymap(_style_kf, subset=_kf_subset)
+                    if _kf_subset else _h_styled,
+                    use_container_width=True, hide_index=True,
+                    height=min(600, max(250, len(_h_disp)*36 + 42))
+                )
+            except Exception:
+                st.dataframe(_h_disp[_hist_show_cols], use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(_h_disp, use_container_width=True, hide_index=True)
+
+        # ── Export ───────────────────────────────────────────────────────────
+        _ts_h = datetime.now().strftime("%Y%m%d_%H%M")
+        _hec1, _hec2 = st.columns(2)
+        with _hec1:
+            st.download_button(
+                f"⬇ CSV — {len(_h_disp)} qualified stop(s)",
+                data=_h_disp[_hist_show_cols].to_csv(index=False, sep=";").encode("utf-8-sig"),
+                file_name=f"TE_historique_{_ts_h}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with _hec2:
+            if st.button("🗑 Reset History", use_container_width=True,
+                         help="Delete tpm_data_persistent.csv from disk",
+                         key="btn_reset_hist"):
+                st.session_state["_confirm_reset"] = True
+
+        if st.session_state.get("_confirm_reset"):
+            st.warning("⚠ Are you sure you want to delete the persistent history?")
+            _rc1, _rc2 = st.columns(2)
+            with _rc1:
+                if st.button("✅ Yes, delete", key="btn_confirm_reset",
+                             use_container_width=True):
+                    try:
+                        os.remove(PERSIST_FILE)
+                        st.session_state.pop("_confirm_reset", None)
+                        st.success("✅ History deleted.")
+                        st.rerun()
+                    except Exception as _re:
+                        st.error(f"Could not delete: {_re}")
+            with _rc2:
+                if st.button("❌ Cancel", key="btn_cancel_reset",
+                             use_container_width=True):
+                    st.session_state.pop("_confirm_reset", None)
+                    st.rerun()
+
+    # Sidebar footer
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="font-size:10px;color:rgba(255,255,255,0.3);
+                    font-family:'JetBrains Mono',monospace;letter-spacing:1px">
+            📜 Historique mode<br>
+            TE CONNECTIVITY © {datetime.now().year}
+        </div>
+        """, unsafe_allow_html=True)
+    st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  DASHBOARD MODE — welcome screen if no file
 # ─────────────────────────────────────────────────────────────────────────────
 if uploaded is None:
     st.markdown(f"""
@@ -765,8 +1061,8 @@ if uploaded is None:
                     font-weight:800;color:#1C1C1C;text-transform:uppercase;
                     letter-spacing:1px;margin-bottom:12px">TPM KPI Dashboard</div>
         <div style="font-size:13px;color:#9A7A60;margin-bottom:20px;line-height:1.7">
-            Import your Hydra MES file<br>
-            to visualize the maintenance KPIs of Bruderer presses.
+            Import your Hydra MES file to visualize<br>
+            the maintenance KPIs of Bruderer presses.
         </div>
         <div>
             <span style="background:#FFF0E6;border:1px solid #F5C8A0;color:#B36030;
@@ -779,21 +1075,30 @@ if uploaded is None:
                          font-size:11px;font-weight:600;border-radius:20px;
                          padding:4px 12px;margin:3px;display:inline-block">.xlsx</span>
         </div>
+        {"<div style='margin-top:16px;font-size:11px;color:#27AE60'>💾 Persistent history detected (" + str(_p_rows if _persist_exists else 0) + " rows)</div>" if _persist_exists else ""}
     </div></div>
     """, unsafe_allow_html=True)
     st.stop()
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  LOAD DATA — with persistence merge
+# ─────────────────────────────────────────────────────────────────────────────
+# Read bytes once (needed for cache key)
+_raw_bytes = uploaded.read()
 
-# Reset editable table if new file uploaded
+# Reset session if a new file is uploaded
 if "last_file" not in st.session_state or st.session_state.last_file != uploaded.name:
     st.session_state.last_file  = uploaded.name
     st.session_state.edited_df  = None
 
-df_raw = load_data(uploaded)
+df_raw = load_data(_raw_bytes, uploaded.name)
 if df_raw.empty:
     st.stop()
 
-# Supprimer les colonnes en double si le fichier source en contient
+# ─────────────────────────────────────────────────────────────────────────────
+#  QUALIFICATION COLUMNS + SESSION STATE INIT (with persistence)
+# ─────────────────────────────────────────────────────────────────────────────
+# Supprimer les colonnes en double
 df_raw = df_raw.loc[:, ~df_raw.columns.duplicated()]
 
 missing = check_missing(df_raw)
@@ -804,7 +1109,7 @@ if missing:
     )
     st.stop()
 
-# ── Add qualification columns if absent — User ID pre-filled with "TE" prefix ──
+# ── Add qualification columns if absent ──────────────────────────────────────
 _QUAL_COLS_DEFAULTS = [
     ("User ID",          "TE"),
     ("Shift",            ""),
@@ -820,16 +1125,19 @@ for _qc, _qd in _QUAL_COLS_DEFAULTS:
     if _qc not in df_raw.columns:
         df_raw[_qc] = _qd
 
-# ── Initialiser session_state.edited_df ──
+# ── Initialise session_state.edited_df ───────────────────────────────────────
 if st.session_state.edited_df is None:
+    # Try to merge saved qualifications from disk
+    _saved_df = load_from_disk()
+    if not _saved_df.empty:
+        df_raw = merge_qualifications(df_raw, _saved_df)
     st.session_state.edited_df = df_raw.copy()
 
-# ── Ensure existing blank User IDs get "TE" prefix & new cost cols exist ──
+# ── Ensure User ID prefix + new cost cols ────────────────────────────────────
 _edf = st.session_state.edited_df
 if "User ID" in _edf.columns:
     _blank_uid = _edf["User ID"].astype(str).str.strip().isin(["", "nan", "None"])
     _edf.loc[_blank_uid, "User ID"] = "TE"
-# Add any new cost columns that did not exist in saved state
 for _qc, _qd in _QUAL_COLS_DEFAULTS:
     if _qc not in _edf.columns:
         _edf[_qc] = _qd
@@ -841,73 +1149,48 @@ if "Qty" in _edf.columns and "Unit Price (€)" in _edf.columns:
     ).round(2)
 st.session_state.edited_df = _edf
 
-# ── Utiliser la version éditée (préserve les qualifications utilisateur) ──
+# ── Use edited version (preserves user qualifications) ───────────────────────
 df_raw = st.session_state.edited_df.copy()
 
 df_raw[COL_MTTR] = pd.to_numeric(df_raw[COL_MTTR], errors="coerce").fillna(0.0)
 
-# MTBF : optionnel — crée une colonne à 0 si absente du fichier
+# MTBF : optionnel
 has_mtbf = COL_MTBF in df_raw.columns
 if has_mtbf:
     df_raw[COL_MTBF] = pd.to_numeric(df_raw[COL_MTBF], errors="coerce").fillna(0.0)
-    mtbf_all_zero = (df_raw[COL_MTBF] == 0).all()
-    if mtbf_all_zero:
-        has_mtbf = False   # présente mais vide → on traite comme absente
+    if (df_raw[COL_MTBF] == 0).all():
+        has_mtbf = False
 else:
     df_raw[COL_MTBF] = 0.0
 
-# Colonnes en heures
 df_raw["mttr_h"] = df_raw[COL_MTTR] / 3600.0
 df_raw["mtbf_h"] = df_raw[COL_MTBF] / 3600.0 if has_mtbf else 0.0
 
-# ── Override MTTR avec Manual Duration (min) si renseigné par l'utilisateur ──
 if "Manual Duration (min)" in df_raw.columns:
     dur_mask = df_raw["Manual Duration (min)"].notna() & (df_raw["Manual Duration (min)"] > 0)
     df_raw.loc[dur_mask, "mttr_h"] = df_raw.loc[dur_mask, "Manual Duration (min)"] / 60.0
 
-# Date — multi-format américain (MM/DD/YYYY, M/D/YYYY, MM-DD-YYYY, M-D-YYYY)
+# Date parsing
 if COL_DATE in df_raw.columns:
     raw_dates = df_raw[COL_DATE].astype(str)
     parsed = pd.Series([pd.NaT] * len(df_raw), dtype="datetime64[ns]")
-
-    formats_to_try = [
-        "%m/%d/%Y %H:%M",   # 03/13/2025 14:30
-        "%m/%d/%Y",          # 03/13/2025
-        "%m-%d-%Y %H:%M",   # 03-13-2025 14:30
-        "%m-%d-%Y",          # 03-13-2025
-        "%-m/%-d/%Y",        # 3/13/2025  (Linux)
-        "%#m/%#d/%Y",        # 3/13/2025  (Windows)
-    ]
-
-    for fmt in formats_to_try:
+    for _fmt in ["%m/%d/%Y %H:%M", "%m/%d/%Y", "%m-%d-%Y %H:%M", "%m-%d-%Y", "%-m/%-d/%Y", "%#m/%#d/%Y"]:
         mask = parsed.isna()
-        if not mask.any():
-            break
+        if not mask.any(): break
         try:
-            parsed[mask] = pd.to_datetime(
-                raw_dates[mask], format=fmt, errors="coerce", dayfirst=False)
+            parsed[mask] = pd.to_datetime(raw_dates[mask], format=_fmt, errors="coerce", dayfirst=False)
         except Exception:
             pass
-
-    # Fallback final : pandas auto avec dayfirst=False
     mask = parsed.isna()
     if mask.any():
-        parsed[mask] = pd.to_datetime(
-            raw_dates[mask], errors="coerce", dayfirst=False)
-
+        parsed[mask] = pd.to_datetime(raw_dates[mask], errors="coerce", dayfirst=False)
     df_raw[COL_DATE] = parsed
     df_raw["date_only"] = df_raw[COL_DATE].dt.normalize()
-    n_ok = df_raw["date_only"].notna().sum()
-    if n_ok == 0:
-        st.warning(f"⚠ Column `{COL_DATE}`: no valid date parsed. "
-                   f"Exemple de valeur brute : `{df_raw.iloc[0][COL_DATE] if len(df_raw) else 'N/A'}`")
-
+    if df_raw["date_only"].notna().sum() == 0:
+        st.warning(f"⚠ Column `{COL_DATE}`: no valid date parsed.")
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  FILTRES SIDEBAR
-# ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
-#  FILTRES SIDEBAR — injectés après chargement des données
+#  SIDEBAR FILTERS — injected after data load
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     all_machines = sorted(df_raw[COL_MACHINE].dropna().unique().tolist())
@@ -922,7 +1205,7 @@ with st.sidebar:
             from datetime import date as dt_date
             dmin = valid_d.min().date()
             dmax = valid_d.max().date()
-            dmax_cal = max(dmax, dt_date.today())  # permettre jusqu'à aujourd'hui
+            dmax_cal = max(dmax, dt_date.today())
             dr = st.date_input("Period", value=(dmin, dmax),
                                min_value=dmin, max_value=dmax_cal,
                                format="DD/MM/YYYY")
@@ -941,7 +1224,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-# Appliquer filtres
+# Apply filters
 if not sel_machines:
     st.warning("⚠ Please select at least one machine.")
     st.stop()
@@ -954,75 +1237,92 @@ if df.empty:
     st.warning("No data for this selection.")
     st.stop()
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  CALCUL KPIs
+#  CALCUL KPIs  (cached — keyed by df hash + filter params)
 # ─────────────────────────────────────────────────────────────────────────────
-mt_total = df["mttr_h"].sum()
-mb_total = df["mtbf_h"].sum()
+@st.cache_data(show_spinner=False)
+def compute_kpis(df_hash: int, _df: pd.DataFrame,
+                 _has_mtbf: bool, _col_status: str,
+                 _col_machine: str, _col_prod: str) -> dict:
+    """Compute all KPIs from filtered df. Cached by df content hash."""
+    mt_total = _df["mttr_h"].sum()
+    mb_total = _df["mtbf_h"].sum()
 
-# ── Availability ──
-# Si MTBF disponible → formule standard MTBF/(MTBF+MTTR)
-# Sinon → ratio rows PRODUCTION / total (basé out of machine_status_name)
-if has_mtbf and mb_total > 0:
-    total = mt_total + mb_total
-    dispo = round(mb_total / total * 100, 2)
-    dispo_mode = "MTBF"
-else:
-    # Fallback : comptage des rows par statut
-    prod_mask = df[COL_STATUS].str.upper().str.contains("PRODUCTION", na=False)
-    n_prod    = prod_mask.sum()
-    n_total   = len(df)
-    dispo     = round(n_prod / n_total * 100, 2) if n_total > 0 else 100.0
-    dispo_mode = "STATUS"
+    # Availability
+    if _has_mtbf and mb_total > 0:
+        dispo = round(mb_total / (mt_total + mb_total) * 100, 2)
+        dispo_mode = "MTBF"
+    else:
+        prod_mask = _df[_col_status].str.upper().str.contains("PRODUCTION", na=False)
+        n_total   = len(_df)
+        dispo     = round(prod_mask.sum() / n_total * 100, 2) if n_total > 0 else 100.0
+        dispo_mode = "STATUS"
 
-stop_rows   = df[df["mttr_h"] > 0]
-mttr_mean_h = round(stop_rows["mttr_h"].mean(), 4) if len(stop_rows) > 0 else 0.0
-mtbf_mean_h = round(df["mtbf_h"].mean(), 4) if has_mtbf else 0.0
-nb_arrets   = len(stop_rows)
+    stop_rows   = _df[_df["mttr_h"] > 0]
+    mttr_mean_h = round(stop_rows["mttr_h"].mean(), 4) if len(stop_rows) > 0 else 0.0
+    mtbf_mean_h = round(_df["mtbf_h"].mean(), 4) if _has_mtbf else 0.0
+    nb_arrets   = len(stop_rows)
 
-# Par machine — "ne" est une méthode pandas, on utilise "nb_evt"
-ma = df.groupby(COL_MACHINE, as_index=False).agg(
-    tm=("mttr_h","sum"), tb=("mtbf_h","sum"), nb_evt=("mttr_h","count"))
+    # Per machine
+    ma = _df.groupby(_col_machine, as_index=False).agg(
+        tm=("mttr_h","sum"), tb=("mtbf_h","sum"), nb_evt=("mttr_h","count"))
+    if _has_mtbf and mb_total > 0:
+        ma["dispo"] = ma.apply(
+            lambda r: round(r["tb"]/(r["tb"]+r["tm"])*100, 1)
+            if (r["tb"]+r["tm"]) > 0 else 100.0, axis=1)
+    else:
+        prod_per_mac = (
+            _df[_df[_col_status].str.upper().str.contains("PRODUCTION", na=False)]
+            .groupby(_col_machine).size().reset_index(name="n_prod"))
+        total_per_mac = _df.groupby(_col_machine).size().reset_index(name="n_total")
+        ratio = prod_per_mac.merge(total_per_mac, on=_col_machine, how="right").fillna(0)
+        ratio["dispo"] = (ratio["n_prod"] / ratio["n_total"] * 100).round(1)
+        ma = ma.merge(ratio[[_col_machine, "dispo"]], on=_col_machine, how="left")
+        ma["dispo"] = ma["dispo"].fillna(0.0)
 
-if has_mtbf and mb_total > 0:
-    # Formule MTBF standard
-    ma["dispo"] = ma.apply(
-        lambda r: round(r["tb"]/(r["tb"]+r["tm"])*100, 1)
-        if (r["tb"]+r["tm"]) > 0 else 100.0, axis=1)
-else:
-    # Fallback : % rows PRODUCTION par machine
-    prod_per_mac = (
-        df[df[COL_STATUS].str.upper().str.contains("PRODUCTION", na=False)]
-        .groupby(COL_MACHINE).size()
-        .reset_index(name="n_prod")
+    # Pareto
+    pareto = _df[_df["mttr_h"]>0].groupby(_col_machine)["mttr_h"].sum().reset_index()
+    pareto.columns = ["Machine","MTTR_total_h"]
+    pareto = pareto.sort_values("MTTR_total_h", ascending=False).reset_index(drop=True)
+    if pareto["MTTR_total_h"].sum() > 0:
+        pareto["Pct"]   = (pareto["MTTR_total_h"]/pareto["MTTR_total_h"].sum()*100).round(1)
+        pareto["Cumul"] = pareto["Pct"].cumsum().round(1)
+    else:
+        pareto["Pct"] = pareto["Cumul"] = 0.0
+
+    # Prod status
+    has_prod_col = _col_prod in _df.columns
+    prod_ct = int(_df[_col_prod].str.lower().str.contains("prod", na=False).sum())               if has_prod_col else 0
+
+    return dict(
+        dispo=dispo, dispo_mode=dispo_mode,
+        mttr_mean_h=mttr_mean_h, mtbf_mean_h=mtbf_mean_h,
+        nb_arrets=nb_arrets, mttr_total_h=round(mt_total,2),
+        mtbf_total_h=round(mb_total,2), nb_rows=len(_df),
+        by_machine=ma, pareto=pareto,
+        has_prod=has_prod_col, prod_ct=prod_ct,
+        nonprod_ct=len(_df)-prod_ct,
     )
-    total_per_mac = df.groupby(COL_MACHINE).size().reset_index(name="n_total")
-    ratio = prod_per_mac.merge(total_per_mac, on=COL_MACHINE, how="right").fillna(0)
-    ratio["dispo"] = (ratio["n_prod"] / ratio["n_total"] * 100).round(1)
-    ma = ma.merge(ratio[[COL_MACHINE, "dispo"]], on=COL_MACHINE, how="left")
-    ma["dispo"] = ma["dispo"].fillna(0.0)
 
-# Pareto
-pareto = df[df["mttr_h"]>0].groupby(COL_MACHINE)["mttr_h"].sum().reset_index()
-pareto.columns = ["Machine","MTTR_total_h"]
-pareto = pareto.sort_values("MTTR_total_h", ascending=False).reset_index(drop=True)
-pareto["Pct"]   = (pareto["MTTR_total_h"]/pareto["MTTR_total_h"].sum()*100).round(1)
-pareto["Cumul"] = pareto["Pct"].cumsum().round(1)
+# Call with a hash of the df to enable caching
+_df_hash = hash(tuple(df.shape) + tuple(df.columns.tolist())
+                + (df["mttr_h"].sum(), df["mtbf_h"].sum(), len(df)))
+_kpi_result = compute_kpis(_df_hash, df, has_mtbf,
+                            COL_STATUS, COL_MACHINE, COL_PROD)
 
-kpi = dict(
-    dispo=dispo, mttr_mean_h=mttr_mean_h, mtbf_mean_h=mtbf_mean_h,
-    nb_arrets=nb_arrets, mttr_total_h=round(mt_total,2),
-    mtbf_total_h=round(mb_total,2), nb_rows=len(df),
-    by_machine=ma, pareto=pareto,
-)
-
-# Production status (si colonne présente)
-has_prod = COL_PROD in df.columns
-if has_prod:
-    prod_ct    = df[df[COL_PROD].str.lower().str.contains("prod", na=False)].shape[0]
-    nonprod_ct = len(df) - prod_ct
-else:
-    prod_ct = nonprod_ct = 0
+# Unpack for backward compatibility
+dispo       = _kpi_result["dispo"]
+dispo_mode  = _kpi_result["dispo_mode"]
+mttr_mean_h = _kpi_result["mttr_mean_h"]
+mtbf_mean_h = _kpi_result["mtbf_mean_h"]
+nb_arrets   = _kpi_result["nb_arrets"]
+ma          = _kpi_result["by_machine"]
+pareto      = _kpi_result["pareto"]
+has_prod    = _kpi_result["has_prod"]
+prod_ct     = _kpi_result["prod_ct"]
+nonprod_ct  = _kpi_result["nonprod_ct"]
+kpi = _kpi_result
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  HEADER — UNIQUE
@@ -1637,6 +1937,7 @@ with tab_kpi:
 
     # ══════════════════════════════════════════════════════════════════════════
     #  PDF BUILDER  — ReportLab + Kaleido
+    # ══════════════════════════════════════════════════════════════════════════
     # ══════════════════════════════════════════════════════════════════════════
     def build_pdf(df_in: pd.DataFrame, kpi_d: dict,
                   ma_table: pd.DataFrame, pareto_df: pd.DataFrame) -> bytes:
@@ -2543,9 +2844,7 @@ with tab_kpi:
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TAB 2 — STOPS QUALIFICATION  (filters + User ID + robust persistence)
-# ═══════════════════════════════════════════════════════════════════════════════
-#  TAB 2 — QUALIFICATION DES ARRÊTS
-# ═══════════════════════════════════════════════════════════════════════════════
+
 with tab_qual:
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -2656,7 +2955,7 @@ with tab_qual:
         "Total Part Cost",                              # calculated (read-only)
     ] if c in df.columns]
 
-    _df_base = _df_stops.copy()   # index = index original de df / session_state
+    _df_base = _df_stops.copy()
 
     if _filter_machine != "All":
         _df_base = _df_base[_df_base[COL_MACHINE] == _filter_machine]
@@ -2668,28 +2967,66 @@ with tab_qual:
                 pd.to_datetime(_df_base[COL_DATE], errors="coerce").dt.date
                 == _target_date.date()]
 
-    # Capturer les indices AVANT de formater les dates
-    _orig_idx = _df_base.index.values   # clés dans session_state.edited_df
+    # ── Pagination — 50 rows/page ──────────────────────────────────────────
+    _PAGE_SIZE   = 50
+    _total_rows  = len(_df_base)
+    _total_pages = max(1, (_total_rows + _PAGE_SIZE - 1) // _PAGE_SIZE)
+    _is_filtered = _filter_machine != "All" or _filter_date_str != "All"
 
-    # Formatage date pour l'affichage
-    _df_show = _df_base[_display_cols].copy()
+    # Reset page when filters change
+    _filter_key = f"{_filter_machine}|{_filter_date_str}"
+    if st.session_state.get("_qual_filter_key") != _filter_key:
+        st.session_state["_qual_filter_key"] = _filter_key
+        st.session_state["_qual_page"] = 0
+
+    _cur_page = max(0, min(
+        st.session_state.get("_qual_page", 0), _total_pages - 1))
+
+    # Navigation bar
+    _pag_c1, _pag_c2, _pag_c3, _pag_c4, _pag_c5 = st.columns([1, 1, 3, 1, 1])
+    with _pag_c1:
+        if st.button("⏮", key="pg_first", use_container_width=True,
+                     disabled=_cur_page == 0, help="First page"):
+            st.session_state["_qual_page"] = 0; st.rerun()
+    with _pag_c2:
+        if st.button("◀", key="pg_prev",  use_container_width=True,
+                     disabled=_cur_page == 0, help="Previous page"):
+            st.session_state["_qual_page"] = _cur_page - 1; st.rerun()
+    with _pag_c3:
+        st.markdown(
+            f'<div style="text-align:center;font-family:\'JetBrains Mono\','
+            f'monospace;font-size:9px;color:#9A7A60;padding:8px 0">'
+            f'Page <strong style="color:{TE_ORANGE}">{_cur_page+1}</strong>'
+            f' / {_total_pages}'
+            f'&nbsp;·&nbsp;<strong style="color:{TE_ORANGE}">{_total_rows}</strong>'
+            f' stop{"s" if _total_rows != 1 else ""}'
+            f'{"&nbsp;·&nbsp;active filter" if _is_filtered else ""}</div>',
+            unsafe_allow_html=True)
+    with _pag_c4:
+        if st.button("▶", key="pg_next",  use_container_width=True,
+                     disabled=_cur_page >= _total_pages - 1, help="Next page"):
+            st.session_state["_qual_page"] = _cur_page + 1; st.rerun()
+    with _pag_c5:
+        if st.button("⏭", key="pg_last",  use_container_width=True,
+                     disabled=_cur_page >= _total_pages - 1, help="Last page"):
+            st.session_state["_qual_page"] = _total_pages - 1; st.rerun()
+
+    # Slice current page
+    _start   = _cur_page * _PAGE_SIZE
+    _end     = min(_start + _PAGE_SIZE, _total_rows)
+    _df_page = _df_base.iloc[_start:_end]
+
+    # Capture original indices BEFORE formatting dates
+    _orig_idx = _df_page.index.values   # keys in session_state.edited_df
+
+    # Format date for display
+    _df_show = _df_page[_display_cols].copy()
     if COL_DATE in _df_show.columns:
         _df_show[COL_DATE] = (
             pd.to_datetime(_df_show[COL_DATE], errors="coerce")
             .dt.strftime("%m/%d/%Y").fillna("—"))
     _df_show = _df_show.reset_index(drop=True)
-
-    # Compteur de lignes
-    _n_shown    = len(_df_show)
-    _is_filtered = _filter_machine != "All" or _filter_date_str != "All"
-    st.markdown(
-        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;'
-        f'color:#9A7A60;margin-bottom:8px;letter-spacing:1px">'
-        f'Showing: <strong style="color:{TE_ORANGE}">{_n_shown}</strong>'
-        f' stop{"s" if _n_shown != 1 else ""}'
-        f'{"  ·  active filter / " + str(_stop_n) + " total stops" if _is_filtered else "  ·  " + str(_stop_n) + " total stops"}'
-        f'</div>',
-        unsafe_allow_html=True)
+    _n_shown = len(_df_show)
 
     if _df_show.empty:
         st.info("No stops match the selected filters.")
@@ -2792,6 +3129,20 @@ with tab_qual:
                   </div>
                 </div>""", unsafe_allow_html=True)
 
+        # ── Persistence status banner ─────────────────────────────────────
+        _persist_info = os.path.exists(PERSIST_FILE)
+        st.markdown(f"""
+        <div style="background:{'rgba(39,174,96,0.08)' if _persist_info else 'rgba(232,101,10,0.08)'};
+                    border:1px solid {'rgba(39,174,96,0.4)' if _persist_info else 'rgba(232,101,10,0.3)'};
+                    border-radius:8px;padding:8px 16px;margin:6px 0;
+                    display:flex;align-items:center;gap:10px">
+          <span>{'💾' if _persist_info else '📝'}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;
+                       color:{'#27AE60' if _persist_info else TE_ORANGE3};letter-spacing:1.5px">
+            {'PERSISTENCE ACTIVE — data saved to tpm_data_persistent.csv' if _persist_info else 'FIRST SAVE — will create tpm_data_persistent.csv'}
+          </span>
+        </div>""", unsafe_allow_html=True)
+
         # ── Bouton 💾 Save Changes ────────────────────────────────────────────
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
         _sb_left, _sb_mid, _sb_right = st.columns([1.5, 2, 1.5])
@@ -2801,7 +3152,9 @@ with tab_qual:
                 type="primary",
                 use_container_width=True,
                 key="btn_save_qual",
-                help="Validate and save entries from the table above")
+                help="Save entries to session AND to tpm_data_persistent.csv")
+
+
 
         # ── Bouton Export Excel — données complètes session_state ────────────
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
@@ -3043,16 +3396,25 @@ with tab_qual:
             ).round(2)
             st.session_state.edited_df = _edf2
 
+            # ── 💾 Save to disk permanently ─────────────────────────────────
+            _disk_ok = save_to_disk(_edf2)
+            st.session_state["_save_disk_ok"] = _disk_ok
+
             # Store result for display after rerun
             st.session_state["_save_result"] = _n_saved
             st.rerun()
 
-        # ── Message succès/info (rendu après rerun, avant le tableau) ─────────
-        # Note : placé ici car Streamlit rend de haut en bas après rerun.
-        # Le message s'affiche juste sous le bouton.
+        # ── Message succès/info ────────────────────────────────────────────────
         if st.session_state.get("_save_result") is not None:
-            _nr = st.session_state.pop("_save_result")
+            _nr       = st.session_state.pop("_save_result")
+            _disk_ok  = st.session_state.pop("_save_disk_ok", False)
             if _nr > 0:
+                _disk_note = (
+                    f'''<br>💾 <strong>Saved to disk</strong> — tpm_data_persistent.csv updated.
+                      Data will be available after page refresh.'''
+                    if _disk_ok else
+                    '''<br>⚠ Could not write to disk. Saved in session only.'''
+                )
                 st.markdown(f"""
                 <div style="background:#eafaf1;border:1.5px solid #a9dfbf;
                             border-left:5px solid {TE_GREEN};border-radius:10px;
@@ -3065,10 +3427,9 @@ with tab_qual:
                                 letter-spacing:1px;margin-bottom:3px">
                       Changes saved
                     </div>
-                    <div style="font-size:12px;color:#145a32;line-height:1.6">
-                      <strong>{_nr}</strong> field{"s" if _nr != 1 else ""}
-                      modified and saved to session.
-                      Data is ready for PDF and CSV export.
+                    <div style="font-size:12px;color:#145a32;line-height:1.8">
+                      <strong>{_nr}</strong> field{"s" if _nr != 1 else ""} modified.
+                      {_disk_note}
                     </div>
                   </div>
                 </div>
@@ -3149,6 +3510,7 @@ with tab_qual:
                     f"Full PDF report available in **📊 KPIs** tab · "
                     f"Full Excel export (all data + qualification) "
                     f"available via the **📥 EXCEL** button above.")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  FOOTER
