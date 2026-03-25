@@ -1,15 +1,15 @@
 """
-╔══════════════════════════════════════════════════════════════════════════╗
-║  TE Connectivity — Stamping Department                                   ║
-║  TPM Maintenance KPI Dashboard — Full Version + Persistent Storage      ║
-║  Bruderer Presses S-001 → S-006 + Peripherals                           ║
-║                                                                          ║
-║  INSTALLATION:                                                           ║
-║    pip install streamlit plotly pandas openpyxl numpy kaleido           ║
-║                                                                          ║
-║  RUN:                                                                    ║
-║    streamlit run app.py                                                  ║
-╚══════════════════════════════════════════════════════════════════════════╝
+
+  TE Connectivity — Stamping Department                                   
+  TPM Maintenance KPI Dashboard — Full Version + Persistent Storage      
+  Bruderer Presses S-001 → S-006 + Peripherals                           
+                                                                          
+  INSTALLATION:                                                           
+    pip install streamlit plotly pandas openpyxl numpy kaleido           
+                                                                          
+  RUN:                                                                    
+    streamlit run app.py                                                  
+
 """
 
 import streamlit as st
@@ -24,24 +24,24 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  PAGE CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 st.set_page_config(
     page_title="TE Connectivity — TPM Dashboard",
-    page_icon="🔩",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  PERSISTENT STORAGE PATH
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 PERSISTENT_CSV = "tpm_data_persistent.csv"
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  COLONNES SOURCE (noms exacts du fichier Hydra)
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 COL_MACHINE   = "machine_id"
 COL_STATUS    = "machine_status_name"
 COL_DATE      = "plant_shift_date"
@@ -50,9 +50,9 @@ COL_MTBF      = "Sum of mtbf_numerator_seconds_quantity"
 COL_PROD      = "hydra_bmk_production_status_name"
 REQUIRED_COLS = [COL_MACHINE, COL_STATUS, COL_MTTR, COL_MTBF]
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  COULEURS TE CONNECTIVITY
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 TE_ORANGE  = "#E8650A"
 TE_ORANGE2 = "#F0934A"
 TE_ORANGE3 = "#F5B87A"
@@ -69,9 +69,9 @@ TE_AMBER   = "#E67E22"
 
 PALETTE = [TE_ORANGE, TE_NAVY, TE_RED, "#8E44AD", TE_GREEN, "#16A085", "#D4AC0D", TE_ORANGE2]
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  CSS GLOBAL
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
@@ -405,7 +405,7 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploader"] div[class*="u
     font-size: 0 !important; overflow: hidden !important;
 }}
 [data-testid="collapsedControl"]::before {{
-    content: "❯" !important; color: white !important;
+    content: "" !important; color: white !important;
     font-size: 13px !important; font-weight: 900 !important;
     font-family: Arial, sans-serif !important; line-height: 1 !important;
     display: block !important;
@@ -456,9 +456,9 @@ section[data-testid="stSidebar"] input[type="text"] {{
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  LISTES DÉROULANTES — Editable Table
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 SHIFTS = ["", "A (6-14h)", "B (14-22h)", "C (22-6h)"]
 
 KEY_FAILURES = [
@@ -486,9 +486,9 @@ _QUAL_COLS_DEFAULTS = [
     ("Total Part Cost",   0.0),
 ]
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  PERSISTENT STORAGE FUNCTIONS
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def load_persistent() -> pd.DataFrame:
     """Load the persistent CSV if it exists. Returns empty DataFrame otherwise."""
@@ -498,7 +498,7 @@ def load_persistent() -> pd.DataFrame:
             df_p.columns = [str(c).strip() for c in df_p.columns]
             return df_p
         except Exception as e:
-            st.warning(f"⚠ Could not read persistent file: {e}")
+            st.warning(f" Could not read persistent file: {e}")
     return pd.DataFrame()
 
 
@@ -507,7 +507,7 @@ def save_persistent(df_to_save: pd.DataFrame):
     try:
         df_to_save.to_csv(PERSISTENT_CSV, index=False, encoding="utf-8")
     except Exception as e:
-        st.error(f"❌ Could not save to disk: {e}")
+        st.error(f" Could not save to disk: {e}")
 
 
 def merge_qualifications(df_new: pd.DataFrame,
@@ -567,9 +567,9 @@ def merge_qualifications(df_new: pd.DataFrame,
     return df_merged
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  DATA LOADING HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def load_data(f) -> pd.DataFrame:
     name = f.name.lower()
@@ -585,7 +585,7 @@ def load_data(f) -> pd.DataFrame:
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except Exception as e:
-        st.error(f"❌ File read error : `{e}`")
+        st.error(f" File read error : `{e}`")
         return pd.DataFrame()
 
 
@@ -604,7 +604,7 @@ def sec_to_h(s):
     return round(float(s) / 3600.0, 4) if not pd.isna(s) else 0.0
 
 
-def dl_png(fig, filename, label="⬇ Download PNG"):
+def dl_png(fig, filename, label=" Download PNG"):
     try:
         img = fig.to_image(format="png", width=1400, height=680, scale=2)
         st.download_button(label=label, data=img,
@@ -702,9 +702,9 @@ def export_excel(df: pd.DataFrame, kpi: dict) -> bytes:
     return buf.getvalue()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  PLOTLY BASE LAYOUT
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 PL = dict(
     plot_bgcolor=TE_WHITE, paper_bgcolor=TE_WHITE,
     font=dict(family="Barlow, sans-serif", color="#4A3020", size=11),
@@ -730,9 +730,9 @@ def _hex_to_rgba(hex_color: str, alpha: float = 0.1) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  SIDEBAR
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 with st.sidebar:
 
     st.markdown(f"""
@@ -749,14 +749,14 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Navigation ──────────────────────────────────────────────────────────
+    #  Navigation 
     st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                 f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                f'🧭 NAVIGATION</p>', unsafe_allow_html=True)
+                f' NAVIGATION</p>', unsafe_allow_html=True)
 
     nav_choice = st.radio(
         "",
-        options=["📊 Dashboard", "📜 Historique"],
+        options=[" Dashboard", " Historique"],
         index=0,
         key="nav_radio",
         label_visibility="collapsed"
@@ -764,10 +764,10 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ── Import Data ──────────────────────────────────────────────────────────
+    #  Import Data 
     st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                 f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                f'📂 IMPORT DATA</p>', unsafe_allow_html=True)
+                f' IMPORT DATA</p>', unsafe_allow_html=True)
 
     uploaded = st.file_uploader(
         "",
@@ -781,13 +781,13 @@ with st.sidebar:
     if uploaded is not None:
         st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                     f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                    f'🔧 FILTERS</p>', unsafe_allow_html=True)
+                    f' FILTERS</p>', unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  PAGE: HISTORIQUE
-# ─────────────────────────────────────────────────────────────────────────────
-if nav_choice == "📜 Historique":
+# 
+if nav_choice == " Historique":
 
     st.markdown(f"""
     <div class="hist-header">
@@ -801,7 +801,7 @@ if nav_choice == "📜 Historique":
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;
                       font-weight:800;color:{TE_WHITE};text-transform:uppercase;
                       letter-spacing:0.5px;margin-bottom:4px">
-            📜 Historique des <span style="color:{TE_ORANGE}">Arrêts Qualifiés</span>
+             Historique des <span style="color:{TE_ORANGE}">Arrêts Qualifiés</span>
           </div>
           <div style="font-size:12px;color:{TE_BROWN};">
             Données persistantes lues depuis <code style="color:{TE_ORANGE2}">{PERSISTENT_CSV}</code>
@@ -821,14 +821,14 @@ if nav_choice == "📜 Historique":
         st.markdown(f"""
         <div style="background:{TE_WHITE};border:2px dashed #F0C8A0;border-radius:14px;
                     padding:48px;text-align:center;margin:32px auto;max-width:480px">
-          <div style="font-size:40px;margin-bottom:12px">📭</div>
+          <div style="font-size:40px;margin-bottom:12px"></div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;
                       font-weight:800;color:{TE_BLACK};text-transform:uppercase;
                       margin-bottom:8px">No History Yet</div>
           <div style="font-size:13px;color:#9A7A60;line-height:1.7">
             No persistent data found.<br>
             Import a Hydra file, qualify some stops<br>
-            and click <strong>💾 Save Changes</strong> to populate this page.
+            and click <strong> Save Changes</strong> to populate this page.
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -853,7 +853,7 @@ if nav_choice == "📜 Historique":
     df_qualified_hist = df_stops_hist[_qual_mask].copy() \
         if len(_qual_mask) > 0 else pd.DataFrame()
 
-    # ── Summary KPIs ─────────────────────────────────────────────────────────
+    #  Summary KPIs 
     _tot_rows   = len(df_hist)
     _tot_stops  = len(df_stops_hist)
     _tot_qual   = len(df_qualified_hist)
@@ -864,17 +864,16 @@ if nav_choice == "📜 Historique":
     _pct_qual   = (_tot_qual / _tot_stops * 100) if _tot_stops > 0 else 0.0
 
     hc1, hc2, hc3, hc4 = st.columns(4)
-    for _col, _icon, _lbl, _val, _unit in [
-        (hc1, "📋", "TOTAL EVENTS",      str(_tot_rows),           "in persistent file"),
-        (hc2, "⚠", "TOTAL STOPS",       str(_tot_stops),          "with MTTR > 0"),
-        (hc3, "✅", "QUALIFIED STOPS",   f"{_tot_qual} ({_pct_qual:.0f}%)",
-                                                                    "shift + key failure"),
-        (hc4, "💰", "SPARE PARTS COST",  f"€ {_tot_cost:,.2f}",   "total recorded"),
+    for _col, _lbl, _val, _unit in [
+        (hc1, "TOTAL EVENTS",      str(_tot_rows),                        "in persistent file"),
+        (hc2, "TOTAL STOPS",       str(_tot_stops),                       "with MTTR > 0"),
+        (hc3, "QUALIFIED STOPS",   f"{_tot_qual} ({_pct_qual:.0f}%)",     "shift + key failure"),
+        (hc4, "SPARE PARTS COST",  f"€ {_tot_cost:,.2f}",                "total recorded"),
     ]:
         with _col:
             st.markdown(f"""
             <div class="hist-kpi-card">
-              <div class="hist-kpi-label">{_icon} {_lbl}</div>
+              <div class="hist-kpi-label">{_lbl}</div>
               <div class="hist-kpi-value">{_val}</div>
               <div style="font-size:10px;color:{TE_BROWN};margin-top:4px">{_unit}</div>
             </div>""", unsafe_allow_html=True)
@@ -886,8 +885,8 @@ if nav_choice == "📜 Historique":
                 "Fill in Shift/Key Failure in the Dashboard and Save Changes.")
         st.stop()
 
-    # ── Filters ──────────────────────────────────────────────────────────────
-    st.markdown(f'<div class="te-section">🔍 Filter History</div>',
+    #  Filters 
+    st.markdown(f'<div class="te-section"> Filter History</div>',
                 unsafe_allow_html=True)
     _hf1, _hf2, _hf3 = st.columns(3)
 
@@ -895,21 +894,21 @@ if nav_choice == "📜 Historique":
         _hmachines = ["All"] + sorted(
             df_qualified_hist[COL_MACHINE].dropna().unique().tolist()
         ) if COL_MACHINE in df_qualified_hist.columns else ["All"]
-        _hfm = st.selectbox("🏭 Machine", _hmachines, key="hist_machine")
+        _hfm = st.selectbox(" Machine", _hmachines, key="hist_machine")
 
     with _hf2:
         _hkf_opts = ["All"] + sorted(
             df_qualified_hist["Key Failure"].dropna()
             .replace({"":"N/A","nan":"N/A"}).unique().tolist()
         ) if "Key Failure" in df_qualified_hist.columns else ["All"]
-        _hfkf = st.selectbox("🔧 Key Failure", _hkf_opts, key="hist_kf")
+        _hfkf = st.selectbox(" Key Failure", _hkf_opts, key="hist_kf")
 
     with _hf3:
         _hshift_opts = ["All"] + sorted(
             df_qualified_hist["Shift"].dropna()
             .replace({"":"N/A"}).unique().tolist()
         ) if "Shift" in df_qualified_hist.columns else ["All"]
-        _hfsh = st.selectbox("🔄 Shift", _hshift_opts, key="hist_shift")
+        _hfsh = st.selectbox(" Shift", _hshift_opts, key="hist_shift")
 
     _dh = df_qualified_hist.copy()
     if _hfm != "All" and COL_MACHINE in _dh.columns:
@@ -926,8 +925,8 @@ if nav_choice == "📜 Historique":
         f' qualified stop(s)</div>',
         unsafe_allow_html=True)
 
-    # ── Table ─────────────────────────────────────────────────────────────────
-    st.markdown(f'<div class="te-section">📋 Qualified Stops Table</div>',
+    #  Table 
+    st.markdown(f'<div class="te-section"> Qualified Stops Table</div>',
                 unsafe_allow_html=True)
 
     _hist_disp_cols = [c for c in [
@@ -961,9 +960,9 @@ if nav_choice == "📜 Historique":
         height=min(700, max(300, len(_dh_show) * 40 + 52))
     )
 
-    # ── Charts ────────────────────────────────────────────────────────────────
+    #  Charts 
     if len(_dh) >= 2:
-        st.markdown(f'<div class="te-section">📊 Analysis</div>',
+        st.markdown(f'<div class="te-section"> Analysis</div>',
                     unsafe_allow_html=True)
         _ch1, _ch2 = st.columns(2)
 
@@ -1023,14 +1022,14 @@ if nav_choice == "📜 Historique":
                 st.plotly_chart(_fig_mac, use_container_width=True, config=PCONF)
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Export ────────────────────────────────────────────────────────────────
-    st.markdown(f'<div class="te-section">⬇ Export History</div>',
+    #  Export 
+    st.markdown(f'<div class="te-section"> Export History</div>',
                 unsafe_allow_html=True)
     _exp1, _exp2 = st.columns(2)
     _ts_hist = datetime.now().strftime("%Y%m%d_%H%M")
     with _exp1:
         st.download_button(
-            "⬇ CSV — QUALIFIED HISTORY",
+            " CSV — QUALIFIED HISTORY",
             data=_dh[_hist_disp_cols].to_csv(
                 index=False, sep=";").encode("utf-8"),
             file_name=f"TE_History_Qualified_{_ts_hist}.csv",
@@ -1039,7 +1038,7 @@ if nav_choice == "📜 Historique":
         )
     with _exp2:
         st.download_button(
-            "⬇ CSV — FULL PERSISTENT DATA",
+            " CSV — FULL PERSISTENT DATA",
             data=df_hist.to_csv(index=False, sep=";").encode("utf-8"),
             file_name=f"TE_Persistent_Full_{_ts_hist}.csv",
             mime="text/csv",
@@ -1049,12 +1048,12 @@ if nav_choice == "📜 Historique":
     st.stop()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  PAGE: DASHBOARD (default)
-#  From here, nav_choice == "📊 Dashboard"
-# ─────────────────────────────────────────────────────────────────────────────
+#  From here, nav_choice == " Dashboard"
+# 
 
-# ── Welcome screen if no file uploaded ──────────────────────────────────────
+#  Welcome screen if no file uploaded 
 if uploaded is None:
     df_persist_check = load_persistent()
     _persist_info = ""
@@ -1063,7 +1062,7 @@ if uploaded is None:
             f'<div style="background:#eafaf1;border:1.5px solid #a9dfbf;'
             f'border-radius:8px;padding:10px 16px;margin-top:12px;'
             f'font-size:12px;color:#145a32">'
-            f'💾 Persistent file found: <strong>{len(df_persist_check):,} rows</strong>'
+            f' Persistent file found: <strong>{len(df_persist_check):,} rows</strong>'
             f' — import a Hydra file to continue with saved qualifications.'
             f'</div>'
         )
@@ -1103,9 +1102,9 @@ if uploaded is None:
     st.stop()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  DATA PREP — Load file + merge with persistent qualifications
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 # Reset editable table if new file uploaded
 if "last_file" not in st.session_state or st.session_state.last_file != uploaded.name:
@@ -1126,12 +1125,12 @@ if missing:
     )
     st.stop()
 
-# ── Add qualification columns if absent ──────────────────────────────────────
+#  Add qualification columns if absent 
 for _qc, _qd in _QUAL_COLS_DEFAULTS:
     if _qc not in df_raw.columns:
         df_raw[_qc] = _qd
 
-# ── Init session_state.edited_df with persistence merge ─────────────────────
+#  Init session_state.edited_df with persistence merge 
 if st.session_state.edited_df is None:
     _df_persist = load_persistent()
     if not _df_persist.empty:
@@ -1139,7 +1138,7 @@ if st.session_state.edited_df is None:
         df_raw = merge_qualifications(df_raw, _df_persist)
     st.session_state.edited_df = df_raw.copy()
 
-# ── Ensure existing blank User IDs get "TE" prefix & new cost cols exist ─────
+#  Ensure existing blank User IDs get "TE" prefix & new cost cols exist 
 _edf = st.session_state.edited_df
 if "User ID" in _edf.columns:
     _blank_uid = _edf["User ID"].astype(str).str.strip().isin(["", "nan", "None"])
@@ -1173,7 +1172,7 @@ if "Manual Duration (min)" in df_raw.columns:
     dur_mask = df_raw["Manual Duration (min)"].notna() & (df_raw["Manual Duration (min)"] > 0)
     df_raw.loc[dur_mask, "mttr_h"] = df_raw.loc[dur_mask, "Manual Duration (min)"] / 60.0
 
-# ── Date parsing ─────────────────────────────────────────────────────────────
+#  Date parsing 
 if COL_DATE in df_raw.columns:
     raw_dates = df_raw[COL_DATE].astype(str)
     parsed    = pd.Series([pd.NaT] * len(df_raw), dtype="datetime64[ns]")
@@ -1200,12 +1199,12 @@ if COL_DATE in df_raw.columns:
     df_raw[COL_DATE] = parsed
     df_raw["date_only"] = df_raw[COL_DATE].dt.normalize()
     if df_raw["date_only"].notna().sum() == 0:
-        st.warning(f"⚠ Column `{COL_DATE}`: no valid date parsed.")
+        st.warning(f" Column `{COL_DATE}`: no valid date parsed.")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  SIDEBAR FILTERS
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 with st.sidebar:
     all_machines = sorted(df_raw[COL_MACHINE].dropna().unique().tolist())
     sel_machines = st.multiselect(
@@ -1232,15 +1231,15 @@ with st.sidebar:
     st.markdown(f"""
     <div style="font-size:10px;color:rgba(255,255,255,0.3);
                 font-family:'JetBrains Mono',monospace;letter-spacing:1px">
-        📁 {uploaded.name}<br>
-        📋 {len(df_raw):,} rows<br>
-        💾 Persistent: {"✅ " + str(os.path.exists(PERSISTENT_CSV)) if os.path.exists(PERSISTENT_CSV) else "❌ none"}<br><br>
+         {uploaded.name}<br>
+         {len(df_raw):,} rows<br>
+         Persistent: {" " + str(os.path.exists(PERSISTENT_CSV)) if os.path.exists(PERSISTENT_CSV) else " none"}<br><br>
         TE CONNECTIVITY © {datetime.now().year}
     </div>
     """, unsafe_allow_html=True)
 
 if not sel_machines:
-    st.warning("⚠ Please select at least one machine.")
+    st.warning(" Please select at least one machine.")
     st.stop()
 
 df = df_raw[df_raw[COL_MACHINE].isin(sel_machines)].copy()
@@ -1252,9 +1251,9 @@ if df.empty:
     st.stop()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  KPI CALCULATIONS
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 mt_total = df["mttr_h"].sum()
 mb_total = df["mtbf_h"].sum()
 
@@ -1313,11 +1312,11 @@ else:
     prod_ct = nonprod_ct = 0
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  HEADER
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 dispo_col = TE_GREEN if dispo >= 95 else TE_AMBER if dispo >= 90 else TE_RED
-dispo_lbl = "On Target ✅" if dispo >= 95 else "Watch ⚠" if dispo >= 90 else "Critical 🔴"
+dispo_lbl = "On Target " if dispo >= 95 else "Watch " if dispo >= 90 else "Critical "
 
 st.markdown(f"""
 <div class="te-header">
@@ -1327,7 +1326,7 @@ st.markdown(f"""
       <div class="te-header-title">Dashboard <span>KPI</span> Maintenance</div>
       <div class="te-header-sub">MTTR · MTBF · Availability · Criticality · Pareto Analysis</div>
       <div class="te-header-badge">
-        ⚙ {df[COL_MACHINE].nunique()} machine{"s" if df[COL_MACHINE].nunique()>1 else ""}
+         {df[COL_MACHINE].nunique()} machine{"s" if df[COL_MACHINE].nunique()>1 else ""}
         &nbsp;·&nbsp; {len(df):,} events
         &nbsp;·&nbsp; <span style="color:{dispo_col};font-weight:700">{dispo}% — {dispo_lbl}</span>
       </div>
@@ -1348,24 +1347,24 @@ if not has_mtbf:
     <div style="background:#fff8e1;border:1px solid #ffe082;border-left:4px solid {TE_AMBER};
                 border-radius:8px;padding:10px 18px;font-size:12px;color:#5d4037;
                 margin-bottom:12px;display:flex;align-items:center;gap:10px">
-      ℹ️ <span><strong>MTBF column absent or empty.</strong>
+       <span><strong>MTBF column absent or empty.</strong>
       Availability computed from machine status (PRODUCTION rows / total).</span>
     </div>
     """, unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  TABS
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 tab_kpi, tab_qual = st.tabs([
-    "📊  Performance Analysis (KPIs)",
-    "📝  Stops Qualification",
+    "  Performance Analysis (KPIs)",
+    "  Stops Qualification",
 ])
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# 
 #  TAB 1 — KPI ANALYSIS
-# ═══════════════════════════════════════════════════════════════════════════════
+# 
 with tab_kpi:
 
     st.markdown(f"""
@@ -1384,7 +1383,7 @@ with tab_kpi:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── KPI Cards ──────────────────────────────────────────────────────────────
+    #  KPI Cards 
     _total_cost = 0.0
     if st.session_state.edited_df is not None and "Total Part Cost" in st.session_state.edited_df.columns:
         _total_cost = float(
@@ -1394,38 +1393,24 @@ with tab_kpi:
     st.markdown('<div class="te-section">Main KPIs</div>', unsafe_allow_html=True)
     c1, c2, c3, c4, c5 = st.columns(5)
 
-    # ── Icon HTML helpers ──────────────────────────────────────────────────────
-    # Card 1 : emoji ⚡ (no Material Icon)
-    _icon_avail = '<span style="font-size:26px;line-height:1;display:block">⚡</span>'
-    # Cards 2-5 : Material Icons with TE Orange
-    def _mi(name):
-        return (f'<span class="material-icons" '
-                f'style="color:#E8650A;font-size:26px;display:block">'
-                f'{name}</span>')
-
-    for col, icon_html, label, value, unit, is_cost in [
-        (c1, _icon_avail,
-         "AVAILABILITY",
+    for col, label, value, unit, is_cost in [
+        (c1, "AVAILABILITY",
          f"{dispo}%",
          f"{'MTBF-based' if has_mtbf else 'Status-based'}",
          False),
-        (c2, _mi("build"),
-         "AVG MTTR / STOP",
+        (c2, "AVG MTTR / STOP",
          f"{mttr_mean_h:.3f} h",
          f"{round(mttr_mean_h*60,1)} min per stop",
          False),
-        (c3, _mi("history"),
-         "AVG MTBF",
+        (c3, "AVG MTBF",
          f"{mtbf_mean_h:.2f} h" if has_mtbf else "N/A",
          "Time between failures" if has_mtbf else "Column absent",
          False),
-        (c4, _mi("report_problem"),
-         "TOTAL STOPS",
+        (c4, "TOTAL STOPS",
          f"{nb_arrets}",
          f"Out of {len(df):,} events",
          False),
-        (c5, _mi("payments"),
-         "TOTAL MAINT. COST",
+        (c5, "TOTAL MAINT. COST",
          f"€ {_total_cost:,.2f}",
          "Spare parts (qualified stops)",
          True),
@@ -1436,7 +1421,6 @@ with tab_kpi:
                        if is_cost and _total_cost > 0 else "")
             st.markdown(f"""
             <div class="kpi-card" style="{_cstyle}">
-              <div class="kpi-icon">{icon_html}</div>
               <div class="kpi-label">{label}</div>
               <div class="kpi-value">{value}</div>
               <div class="kpi-divider"></div>
@@ -1444,8 +1428,8 @@ with tab_kpi:
             </div>""", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Performance Trend ──────────────────────────────────────────────────────
-    st.markdown('<div class="te-section">📈 Performance Trend</div>',
+    #  Performance Trend 
+    st.markdown('<div class="te-section"> Performance Trend</div>',
                 unsafe_allow_html=True)
 
     if "date_only" in df.columns:
@@ -1567,7 +1551,7 @@ with tab_kpi:
                 height=min(420, len(_tbl) * 36 + 42))
 
         _chart_choice = st.radio(
-            "🔍 Select chart to display:",
+            " Select chart to display:",
             options=["Availability (%)", "MTTR (h)", "MTBF (h)"],
             index=0, horizontal=True, key="te_chart_pick")
 
@@ -1592,10 +1576,10 @@ with tab_kpi:
                          target=_tgt, y_fmt=_fmt, height=460),
                 use_container_width=True, config=PCONF)
             if _sel == "MTBF (h)" and not is_mtbf:
-                st.caption("⚠ MTBF column absent from Hydra file.")
+                st.caption(" MTBF column absent from Hydra file.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        _stab_w, _stab_m = st.tabs(["📆  Weekly View", "📅  Monthly View"])
+        _stab_w, _stab_m = st.tabs(["  Weekly View", "  Monthly View"])
 
         with _stab_w:
             if len(_df_week) < 2:
@@ -1614,9 +1598,9 @@ with tab_kpi:
                 _te_recap_table(_df_month, "Month")
 
     else:
-        st.info("⚠ Column `plant_shift_date` absent — time trend unavailable.")
+        st.info(" Column `plant_shift_date` absent — time trend unavailable.")
 
-    # ── Pareto + Pie ───────────────────────────────────────────────────────────
+    #  Pareto + Pie 
     st.markdown('<div class="te-section">Pareto & Cause Analysis</div>',
                 unsafe_allow_html=True)
     col_l, col_r = st.columns(2, gap="medium")
@@ -1624,7 +1608,7 @@ with tab_kpi:
     with col_l:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">📊 Downtime Pareto</div></div>""",
+          <div class="chart-title"> Downtime Pareto</div></div>""",
           unsafe_allow_html=True)
         if not pareto.empty:
             bc = [TE_ORANGE if i<2 else TE_NAVY if i<4 else "#A8A8A8"
@@ -1659,7 +1643,7 @@ with tab_kpi:
             top1 = pareto.iloc[0]
             top2_pct = pareto.head(2)["Pct"].sum()
             st.markdown(
-                f'<div class="te-insight-crit">🔴 <strong>{top1["Machine"]}</strong> '
+                f'<div class="te-insight-crit"> <strong>{top1["Machine"]}</strong> '
                 f'= <strong>{top1["Pct"]}%</strong> of downtime. '
                 f'Top 2 = <strong>{top2_pct:.1f}%</strong>.</div>',
                 unsafe_allow_html=True)
@@ -1670,7 +1654,7 @@ with tab_kpi:
     with col_r:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">🍩 Cause Analysis</div></div>""",
+          <div class="chart-title"> Cause Analysis</div></div>""",
           unsafe_allow_html=True)
         sc = df[COL_STATUS].value_counts().reset_index()
         sc.columns = ["Statut", "Nombre"]
@@ -1695,13 +1679,13 @@ with tab_kpi:
             rc = int(rep_row["Nombre"].sum())
             dominant = "Micro-Stops" if mc > rc else "Repairs"
             st.markdown(
-                f'<div class="te-insight">ℹ️ <strong>{dominant}</strong> dominate '
+                f'<div class="te-insight"> <strong>{dominant}</strong> dominate '
                 f'({max(mc,rc)} occurrences). '
                 f'{"Focus on 5S and standardization." if mc>rc else "Strengthen preventive maintenance."}'
                 f'</div>', unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Criticality Matrix + Daily Trend ──────────────────────────────────────
+    #  Criticality Matrix + Daily Trend 
     st.markdown('<div class="te-section">Criticality & Time Trend</div>',
                 unsafe_allow_html=True)
     col_a, col_b = st.columns([2, 3], gap="medium")
@@ -1709,7 +1693,7 @@ with tab_kpi:
     with col_a:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">🎯 Criticality Matrix</div></div>""",
+          <div class="chart-title"> Criticality Matrix</div></div>""",
           unsafe_allow_html=True)
         mx_v = ma["tm"].max() * 1.55 or 10
         my_v = ma["tb"].max() * 1.55 or 100
@@ -1724,10 +1708,10 @@ with tab_kpi:
             fig_mat.add_shape(type="rect", x0=x0, y0=y0, x1=x1, y1=y1,
                               fillcolor=c, line_width=0, layer="below")
         for txt, x, y, tc in [
-            ("✅ RELIABLE",  midx*0.04, my_v*0.97, TE_GREEN),
-            ("👁 WATCH",    mx_v*0.54, my_v*0.97, TE_NAVY),
-            ("⚠ IMPROVE",  midx*0.04, my_v*0.47, TE_AMBER),
-            ("🔴 CRITICAL", mx_v*0.54, my_v*0.47, TE_RED),
+            (" RELIABLE",  midx*0.04, my_v*0.97, TE_GREEN),
+            (" WATCH",    mx_v*0.54, my_v*0.97, TE_NAVY),
+            (" IMPROVE",  midx*0.04, my_v*0.47, TE_AMBER),
+            (" CRITICAL", mx_v*0.54, my_v*0.47, TE_RED),
         ]:
             fig_mat.add_annotation(x=x, y=y, text=txt, showarrow=False,
                 font=dict(size=9, color=tc, family="Barlow Condensed"),
@@ -1759,14 +1743,14 @@ with tab_kpi:
           <div class="quad q-good"><h5>↖ Reliable + Fast</h5><p>Maintain standard PM</p></div>
           <div class="quad q-watch"><h5>↗ Monitor</h5><p>Improve repair procedure</p></div>
           <div class="quad q-warn"><h5>↙ Improve</h5><p>Reinforced preventive PM</p></div>
-          <div class="quad q-crit"><h5>↘ Bad Actor 🔴</h5><p>Absolute TPM priority</p></div>
+          <div class="quad q-crit"><h5>↘ Bad Actor </h5><p>Absolute TPM priority</p></div>
         </div>""", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_b:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">📈 Daily Availability Trend</div></div>""",
+          <div class="chart-title"> Daily Availability Trend</div></div>""",
           unsafe_allow_html=True)
         if "date_only" in df.columns:
             dm = df.groupby(["date_only", COL_MACHINE]).agg(
@@ -1791,7 +1775,7 @@ with tab_kpi:
                     hovertemplate=f"<b>{mac}</b><br>%{{x|%m/%d/%Y}}<br>Avail.: <b>%{{y}}%</b><extra></extra>"
                 ))
             fig_evo.add_trace(go.Scatter(
-                x=da["date_only"], y=da["dp"], mode="lines", name="▶ Global",
+                x=da["date_only"], y=da["dp"], mode="lines", name=" Global",
                 line=dict(color=TE_NAVY, width=3, dash="dot"),
                 hovertemplate="Global<br>%{x|%m/%d/%Y}<br>Avail.: <b>%{y}%</b><extra></extra>"))
             apply(fig_evo, height=360,
@@ -1804,7 +1788,7 @@ with tab_kpi:
             st.info("Column `plant_shift_date` absent — trend unavailable.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── MTBF + MTTR by Machine ─────────────────────────────────────────────────
+    #  MTBF + MTTR by Machine 
     st.markdown('<div class="te-section">MTTR & MTBF Detail by Machine</div>',
                 unsafe_allow_html=True)
     col_c, col_d = st.columns(2, gap="medium")
@@ -1853,7 +1837,7 @@ with tab_kpi:
         st.plotly_chart(fig_mt, use_container_width=True, config=PCONF)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Summary Table ──────────────────────────────────────────────────────────
+    #  Summary Table 
     st.markdown('<div class="te-section">Summary Table by Machine</div>',
                 unsafe_allow_html=True)
 
@@ -1869,18 +1853,18 @@ with tab_kpi:
     with ci1:
         if worst["Availability (%)"] < 90:
             st.markdown(
-                f'<div class="te-insight-crit">🔴 <strong>Bad Actor: {worst["Machine"]}</strong>'
+                f'<div class="te-insight-crit"> <strong>Bad Actor: {worst["Machine"]}</strong>'
                 f' — Avail. {worst["Availability (%)"]:.1f}% '
                 f'(MTTR = {worst["Total MTTR (h)"]:.3f} h). Priority TPM action.</div>',
                 unsafe_allow_html=True)
         else:
             st.markdown(
-                f'<div class="te-insight-ok">✅ All machines ≥ 90%. '
+                f'<div class="te-insight-ok"> All machines ≥ 90%. '
                 f'Best: <strong>{best["Machine"]}</strong> ({best["Availability (%)"]:.1f}%).</div>',
                 unsafe_allow_html=True)
     with ci2:
         st.markdown(
-            f'<div class="te-insight">📊 <strong>Global avg MTTR:</strong> '
+            f'<div class="te-insight"> <strong>Global avg MTTR:</strong> '
             f'{mttr_mean_h:.3f} h ({round(mttr_mean_h*60,1)} min) · '
             f'<strong>Total Stops:</strong> {nb_arrets} / {len(df):,} events.</div>',
             unsafe_allow_html=True)
@@ -1913,11 +1897,11 @@ with tab_kpi:
         use_container_width=True, hide_index=True
     )
 
-    # ── Export ─────────────────────────────────────────────────────────────────
+    #  Export 
     st.markdown('<div class="te-section">Data Export</div>', unsafe_allow_html=True)
     today_str = datetime.now().strftime("%Y%m%d_%H%M")
 
-    # ── PDF Builder ────────────────────────────────────────────────────────────
+    #  PDF Builder 
     def build_pdf(df_in: pd.DataFrame, kpi_d: dict,
                   ma_table: pd.DataFrame, pareto_df: pd.DataFrame) -> bytes:
         from reportlab.lib.pagesizes import A4
@@ -2014,7 +1998,7 @@ with tab_kpi:
                     story.append(Paragraph(caption, S_CAP))
             else:
                 story.append(Paragraph(
-                    f"⚠ Chart unavailable ({caption}) — pip install kaleido", S_CAP))
+                    f" Chart unavailable ({caption}) — pip install kaleido", S_CAP))
             story.append(Spacer(1, 0.2*cm))
 
         def _pdf_te_agg(df_src):
@@ -2117,7 +2101,7 @@ with tab_kpi:
             cws = [IW*x for x in [0.14, 0.17, 0.17, 0.22, 0.13, 0.13]]
             return _tbl(hdr + rows, cws, fs=8, extras=extras)
 
-        # ── Cover page ─────────────────────────────────────────────────────────
+        #  Cover page 
         def _cover_row(content, bg, pad_top=8, pad_bot=8, left=10):
             t = Table([[content]], colWidths=[IW])
             t.setStyle(TableStyle([
@@ -2133,7 +2117,7 @@ with tab_kpi:
             Paragraph("≡ &nbsp; TE CONNECTIVITY", S_BRAND),
             C_NAVY, pad_top=22, pad_bot=4))
         story.append(_cover_row(
-            Paragraph("▌ &nbsp; STAMPING DEPT &nbsp;·&nbsp; "
+            Paragraph(" &nbsp; STAMPING DEPT &nbsp;·&nbsp; "
                       "BRUDERER PRESSES &nbsp;·&nbsp; TANGIER PLANT 1310",
                       ps("bar", fontSize=8, textColor=C_WH,
                          fontName="Helvetica-Bold", letterSpacing=2)),
@@ -2174,8 +2158,8 @@ with tab_kpi:
         story.append(_tbl(_kpi_data, [IW*0.55, IW*0.45], fs=9, extras=_cover_extras))
         story.append(PageBreak())
 
-        # ── Page 2: KPIs + Pareto + Pie ────────────────────────────────────────
-        section("── KPIs PRINCIPAUX")
+        #  Page 2: KPIs + Pareto + Pie 
+        section(" KPIs PRINCIPAUX")
         _kw = IW / 4
         _kpi_card = Table([
             ["Availability", "Stops", "MTTR Moy.", "MTBF Moy."],
@@ -2203,7 +2187,7 @@ with tab_kpi:
         story.append(_kpi_card)
         story.append(Spacer(1, 0.4*cm))
 
-        section("── DOWNTIME PARETO")
+        section(" DOWNTIME PARETO")
         if not pareto_df.empty:
             _bc = [TE_ORANGE if i<2 else TE_NAVY if i<4 else "#A8A8A8"
                    for i in range(len(pareto_df))]
@@ -2232,7 +2216,7 @@ with tab_kpi:
                 yaxis2=dict(title="Cumul (%)", range=[0,115], ticksuffix="%", tickfont=dict(size=9)))
             insert_fig(_fp, "Downtime Pareto", w_px=720, h_px=290)
 
-        section("── CAUSE ANALYSIS")
+        section(" CAUSE ANALYSIS")
         _sc = df_in[COL_STATUS].value_counts().reset_index()
         _sc.columns = ["Statut", "Nombre"]
         _pie_c = {"PRODUCTION":"#27AE60","micro stops":"#E8650A",
@@ -2253,8 +2237,8 @@ with tab_kpi:
         insert_fig(_fpi, "Machine status breakdown", w_px=720, h_px=300)
         story.append(PageBreak())
 
-        # ── Page 3: Criticality + Daily Trend ──────────────────────────────────
-        section("── CRITICALITY MATRIX  (MTTR vs MTBF)")
+        #  Page 3: Criticality + Daily Trend 
+        section(" CRITICALITY MATRIX  (MTTR vs MTBF)")
         _ma_p = df_in.groupby(COL_MACHINE, as_index=False).agg(
             tm=("mttr_h","sum"), tb=("mtbf_h","sum"), nb_evt=(COL_STATUS,"count"))
         _ma_p["dispo"] = _ma_p.apply(
@@ -2272,10 +2256,10 @@ with tab_kpi:
             _fmat.add_shape(type="rect",x0=_x0,y0=_y0,x1=_x1,y1=_y1,
                              fillcolor=_c,line_width=0,layer="below")
         for _txt,_x,_y,_tc in [
-            ("✅ RELIABLE",_midx*0.04,_my*0.97,"#27AE60"),
-            ("👁 WATCH",   _mx*0.54,  _my*0.97,"#1B2A4A"),
-            ("⚠ IMPROVE",  _midx*0.04,_my*0.47,"#F39C12"),
-            ("🔴 CRITICAL",_mx*0.54,  _my*0.47,"#C0392B"),
+            (" RELIABLE",_midx*0.04,_my*0.97,"#27AE60"),
+            (" WATCH",   _mx*0.54,  _my*0.97,"#1B2A4A"),
+            (" IMPROVE",  _midx*0.04,_my*0.47,"#F39C12"),
+            (" CRITICAL",_mx*0.54,  _my*0.47,"#C0392B"),
         ]:
             _fmat.add_annotation(x=_x,y=_y,text=_txt,showarrow=False,
                 font=dict(size=9,color=_tc),xanchor="left",yanchor="top")
@@ -2328,7 +2312,7 @@ with tab_kpi:
                     hoverinfo="skip"))
             _fevo.add_trace(go.Scatter(
                 x=_da["date_only"],y=_da["dp"],
-                mode="lines",name="▶ Global",
+                mode="lines",name=" Global",
                 line=dict(color="#1B2A4A",width=3,dash="dot"),
                 hoverinfo="skip"))
             _fevo.update_layout(
@@ -2343,7 +2327,7 @@ with tab_kpi:
             insert_fig(_fevo, "Daily availability trend", w_px=720, h_px=290)
         story.append(PageBreak())
 
-        # ── Page 4: Trend Analysis ──────────────────────────────────────────────
+        #  Page 4: Trend Analysis 
         story.append(Paragraph("TREND ANALYSIS / ANALYSE DES TENDANCES", S_SEC))
         story.append(hr(thick=2))
         story.append(Spacer(1, 0.1*cm))
@@ -2357,7 +2341,7 @@ with tab_kpi:
         ]:
             if not _has_v:
                 story.append(Paragraph(
-                    f"⚠ {_view_lbl} — insufficient data.", S_CAP))
+                    f" {_view_lbl} — insufficient data.", S_CAP))
                 continue
             story.append(Paragraph(_view_lbl, S_SSEC))
             story.append(hr(color=C_NAVY, thick=0.8))
@@ -2380,8 +2364,8 @@ with tab_kpi:
             story.append(Spacer(1, 0.4*cm))
         story.append(PageBreak())
 
-        # ── Page 5: Summary Table ───────────────────────────────────────────────
-        section("── SUMMARY TABLE BY MACHINE")
+        #  Page 5: Summary Table 
+        section(" SUMMARY TABLE BY MACHINE")
         _hd_ma = [["Machine","MTTR Total (h)","MTBF Total (h)","Events","Availability (%)"]]
         _rows_ma = []
         _ext_ma  = []
@@ -2411,7 +2395,7 @@ with tab_kpi:
         story.append(Spacer(1, 0.3*cm))
 
         if not pareto_df.empty:
-            section("── DOWNTIME PARETO — DÉTAIL")
+            section(" DOWNTIME PARETO — DÉTAIL")
             _hd_p  = [["Machine","MTTR Total (h)","Part (%)","Cumul (%)"]]
             _rows_p = [[str(r["Machine"]),
                          f"{float(r['MTTR_total_h']):.3f}",
@@ -2422,8 +2406,8 @@ with tab_kpi:
                                [IW*x for x in [0.30,0.28,0.21,0.21]], fs=9))
         story.append(PageBreak())
 
-        # ── Page 6: Qualified Stops ─────────────────────────────────────────────
-        section("── QUALIFIED STOPS — TECHNICIAN INPUT")
+        #  Page 6: Qualified Stops 
+        section(" QUALIFIED STOPS — TECHNICIAN INPUT")
         if all(c in df_in.columns for c in ["Shift","Key Failure"]):
             def _nb(v): return str(v).strip() not in ("","None","nan")
             _qdf = df_in[
@@ -2462,10 +2446,10 @@ with tab_kpi:
         else:
             story.append(Paragraph("Shift / Key Failure columns not available.", S_BODY))
 
-        # ── Page 7: Spare Parts Cost ────────────────────────────────────────────
+        #  Page 7: Spare Parts Cost 
         story.append(PageBreak())
         _hdr_cost = Table([[
-            Paragraph("💰  SPARE PARTS &amp; MAINTENANCE COSTS",
+            Paragraph("  SPARE PARTS &amp; MAINTENANCE COSTS",
                       ps("sph", fontSize=16, fontName="Helvetica-Bold",
                          textColor=C_WH, leading=20)),
             Paragraph("Financial breakdown by event",
@@ -2526,7 +2510,7 @@ with tab_kpi:
         story.append(Spacer(1, 0.35*cm))
 
         if not _cd.empty:
-            story.append(Paragraph("── Event Detail", S_SSEC))
+            story.append(Paragraph(" Event Detail", S_SSEC))
             story.append(hr(color=C_NAVY, thick=0.8))
             _cost_hdr = [["Machine","Date","Shift","Key Failure",
                            "Spare Part / Ref","Qty","Unit Price (€)","Total Cost (€)"]]
@@ -2558,7 +2542,7 @@ with tab_kpi:
                        .sum().reset_index()
                        .sort_values("Total Part Cost", ascending=False))
             if len(_by_mac) >= 1:
-                story.append(Paragraph("── Cost by Machine", S_SSEC))
+                story.append(Paragraph(" Cost by Machine", S_SSEC))
                 story.append(hr(color=C_NAVY, thick=0.8))
                 _fbar = go.Figure(go.Bar(
                     x=_by_mac[COL_MACHINE],
@@ -2625,7 +2609,7 @@ with tab_kpi:
         try:
             _pdf_bytes = build_pdf(df, kpi, ma_disp, pareto)
             st.download_button(
-                "⬇ DOWNLOAD PDF REPORT", data=_pdf_bytes,
+                " DOWNLOAD PDF REPORT", data=_pdf_bytes,
                 file_name=f"TE_TPM_{today_str}.pdf", mime="application/pdf",
                 use_container_width=True)
         except Exception as _e:
@@ -2634,7 +2618,7 @@ with tab_kpi:
         try:
             _xl = export_excel(df, kpi)
             st.download_button(
-                "⬇ EXCEL MULTI-SHEET", data=_xl,
+                " EXCEL MULTI-SHEET", data=_xl,
                 file_name=f"TE_KPI_{today_str}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True)
@@ -2642,15 +2626,15 @@ with tab_kpi:
             st.warning(f"Excel: {_e}")
     with ec3:
         st.download_button(
-            "⬇ CSV PARETO",
+            " CSV PARETO",
             data=pareto.to_csv(index=False, sep=";").encode("utf-8"),
             file_name=f"TE_pareto_{today_str}.csv",
             mime="text/csv", use_container_width=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# 
 #  TAB 2 — STOPS QUALIFICATION
-# ═══════════════════════════════════════════════════════════════════════════════
+# 
 with tab_qual:
 
     def _is_qualified(r):
@@ -2673,14 +2657,14 @@ with tab_qual:
         <div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;
                       color:{TE_ORANGE};letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">
-            ✏️ Stops Qualification
+             Stops Qualification
           </div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:10px;
                       color:rgba(255,255,255,0.6);line-height:1.9">
             Fill in <strong style="color:{TE_ORANGE2}">User ID</strong>,
             <strong style="color:{TE_ORANGE2}">Shift</strong>
             and <strong style="color:{TE_ORANGE2}">Key Failure</strong>
-            · Click <strong style="color:{TE_ORANGE2}">💾 Save Changes</strong> to persist on disk
+            · Click <strong style="color:{TE_ORANGE2}"> Save Changes</strong> to persist on disk
           </div>
         </div>
         <div style="text-align:right">
@@ -2710,7 +2694,7 @@ with tab_qual:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Persistent save indicator ──────────────────────────────────────────────
+    #  Persistent save indicator 
     if os.path.exists(PERSISTENT_CSV):
         _fsize = os.path.getsize(PERSISTENT_CSV)
         _fmod  = datetime.fromtimestamp(os.path.getmtime(PERSISTENT_CSV))
@@ -2719,13 +2703,13 @@ with tab_qual:
                     border-left:4px solid {TE_GREEN};border-radius:8px;
                     padding:8px 14px;margin-bottom:10px;font-size:11px;
                     color:#145a32;display:flex;align-items:center;gap:10px">
-          💾 <span>Persistent file active: <strong>{PERSISTENT_CSV}</strong>
+           <span>Persistent file active: <strong>{PERSISTENT_CSV}</strong>
           &nbsp;·&nbsp; {_fsize/1024:.1f} KB
           &nbsp;·&nbsp; Last saved: <strong>{_fmod.strftime('%d/%m/%Y %H:%M')}</strong></span>
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Quick Search filters ──────────────────────────────────────────────────
+    #  Quick Search filters 
     st.markdown(f"""
     <div style="background:{TE_WHITE};border:1px solid #EDE0D4;
                 border-left:4px solid {TE_ORANGE};border-radius:10px;
@@ -2733,7 +2717,7 @@ with tab_qual:
       <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
                   letter-spacing:2.5px;text-transform:uppercase;
                   color:{TE_ORANGE};margin-bottom:10px">
-        🔍 Quick Search
+         Quick Search
       </div>
     """, unsafe_allow_html=True)
 
@@ -2744,7 +2728,7 @@ with tab_qual:
         _machines_avail = ["All"] + sorted(
             _df_stops[COL_MACHINE].dropna().unique().tolist())
         _filter_machine = st.selectbox(
-            "🏭 Machine ID", options=_machines_avail, index=0,
+            " Machine ID", options=_machines_avail, index=0,
             key="q_filter_machine")
 
     with _fcol2:
@@ -2752,7 +2736,7 @@ with tab_qual:
         _dates_avail  = sorted(_dates_raw.dt.date.unique())
         _date_options = ["All"] + [d.strftime("%m/%d/%Y") for d in _dates_avail]
         _filter_date_str = st.selectbox(
-            "📅 Exact Date", options=_date_options, index=0,
+            " Exact Date", options=_date_options, index=0,
             key="q_filter_date")
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -2812,43 +2796,43 @@ with tab_qual:
             column_order=_display_cols,
             column_config={
                 COL_MACHINE: st.column_config.TextColumn(
-                    "🏭 Machine", disabled=True, width="small"),
+                    " Machine", disabled=True, width="small"),
                 COL_DATE: st.column_config.TextColumn(
-                    "📅 Date", disabled=True, width="small"),
+                    " Date", disabled=True, width="small"),
                 COL_STATUS: st.column_config.TextColumn(
-                    "⚙ Status", disabled=True, width="medium"),
+                    " Status", disabled=True, width="medium"),
                 "mttr_h": st.column_config.NumberColumn(
                     "⏱ MTTR (h)", format="%.4f",
                     disabled=True, width="small"),
                 "User ID": st.column_config.TextColumn(
-                    "👤 User ID", disabled=False, width="small",
+                    " User ID", disabled=False, width="small",
                     max_chars=20,
                     help="Your technician badge / employee ID"),
                 "Shift": st.column_config.SelectboxColumn(
-                    "🔄 Shift", options=SHIFTS,
+                    " Shift", options=SHIFTS,
                     required=False, width="small",
                     help="A (6-14h) · B (14-22h) · C (22-6h)"),
                 "Key Failure": st.column_config.SelectboxColumn(
-                    "🔧 Key Failure", options=KEY_FAILURES,
+                    " Key Failure", options=KEY_FAILURES,
                     required=False, width="large",
                     help="Root cause of the stop"),
                 "Issue Description": st.column_config.TextColumn(
-                    "📝 Issue Description", disabled=False, width="large",
+                    " Issue Description", disabled=False, width="large",
                     max_chars=300),
                 "Action Taken": st.column_config.TextColumn(
-                    "🔨 Action Taken", disabled=False, width="large",
+                    " Action Taken", disabled=False, width="large",
                     max_chars=300),
                 "Spare Part Ref": st.column_config.TextColumn(
-                    "🔩 Spare Part / Ref", disabled=False, width="medium",
+                    " Spare Part / Ref", disabled=False, width="medium",
                     max_chars=100),
                 "Qty": st.column_config.NumberColumn(
-                    "🔢 Qty", disabled=False, width="small",
+                    " Qty", disabled=False, width="small",
                     min_value=0, step=1, default=0),
                 "Unit Price (€)": st.column_config.NumberColumn(
-                    "💶 Unit Price (€)", disabled=False, width="small",
+                    " Unit Price (€)", disabled=False, width="small",
                     min_value=0.0, step=0.01, format="%.2f", default=0.0),
                 "Total Part Cost": st.column_config.NumberColumn(
-                    "💰 Total Cost (€)", disabled=True, width="small",
+                    " Total Cost (€)", disabled=True, width="small",
                     format="%.2f",
                     help="Qty × Unit Price (auto-calculated on Save)"),
             },
@@ -2866,7 +2850,7 @@ with tab_qual:
                             border:1.5px solid #27AE60;border-radius:8px;
                             padding:10px 18px;margin:6px 0;
                             display:flex;align-items:center;gap:12px">
-                  <span style="font-size:20px">💰</span>
+                  <span style="font-size:20px"></span>
                   <div>
                     <span style="font-family:'Barlow Condensed',sans-serif;
                                  font-size:10px;color:rgba(255,255,255,0.5);
@@ -2878,23 +2862,23 @@ with tab_qual:
                       € {_live_cost:,.2f}
                     </span>
                     <span style="font-size:10px;color:rgba(255,255,255,0.4);margin-left:8px">
-                      (click 💾 Save to update global KPI and persist to disk)
+                      (click  Save to update global KPI and persist to disk)
                     </span>
                   </div>
                 </div>""", unsafe_allow_html=True)
 
-        # ── Save button ────────────────────────────────────────────────────────
+        #  Save button 
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
         _sb_left, _sb_mid, _sb_right = st.columns([1.5, 2, 1.5])
         with _sb_mid:
             _save_clicked = st.button(
-                "💾  SAVE CHANGES",
+                "  SAVE CHANGES",
                 type="primary",
                 use_container_width=True,
                 key="btn_save_qual",
                 help="Save entries and write to disk (tpm_data_persistent.csv)")
 
-        # ── Excel export button ────────────────────────────────────────────────
+        #  Excel export button 
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
         def _build_excel_export():
@@ -2982,7 +2966,7 @@ with tab_qual:
                     return (str(r.get("Shift","")).strip() not in ("","nan","None") or
                             str(r.get("Key Failure","")).strip() not in ("","nan","None"))
                 _stops["Qualified"] = _stops[_stops_cols].apply(
-                    _mark_qual, axis=1).map({True:"✅ Yes", False:"⬜ No"})
+                    _mark_qual, axis=1).map({True:" Yes", False:" No"})
                 _stops2_cols = _stops_cols + ["Qualified"]
                 _stops[_stops2_cols].to_excel(_writer, sheet_name="Stops", index=False)
                 _style_sheet(_writer.sheets["Stops"], _stops[_stops2_cols], header_color="E8650A")
@@ -3017,7 +3001,7 @@ with tab_qual:
                 _excel_bytes = _build_excel_export()
                 _ts_xl = datetime.now().strftime("%Y%m%d_%H%M")
                 st.download_button(
-                    label="📥  EXPORT QUALIFIED DATA (EXCEL)",
+                    label="  EXPORT QUALIFIED DATA (EXCEL)",
                     data=_excel_bytes,
                     file_name=f"TE_Qualification_{_ts_xl}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument"
@@ -3026,9 +3010,9 @@ with tab_qual:
                     key="btn_export_excel"
                 )
             except Exception as _ex_err:
-                st.warning(f"⚠ Excel export unavailable: {_ex_err}")
+                st.warning(f" Excel export unavailable: {_ex_err}")
 
-        # ── SAVE LOGIC — persists to disk ──────────────────────────────────────
+        #  SAVE LOGIC — persists to disk 
         if _save_clicked and _edited is not None:
             _n_saved = 0
             _ALL_SAVE_COLS = [
@@ -3062,7 +3046,7 @@ with tab_qual:
             ).round(2)
             st.session_state.edited_df = _edf2
 
-            # ── WRITE TO DISK ──────────────────────────────────────────────────
+            #  WRITE TO DISK 
             save_persistent(st.session_state.edited_df)
 
             st.session_state["_save_result"] = _n_saved
@@ -3076,7 +3060,7 @@ with tab_qual:
                             border-left:5px solid {TE_GREEN};border-radius:10px;
                             padding:14px 20px;margin-top:6px;
                             display:flex;align-items:center;gap:14px">
-                  <span style="font-size:24px">✅</span>
+                  <span style="font-size:24px"></span>
                   <div>
                     <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;
                                 font-weight:800;color:#1e8449;text-transform:uppercase;
@@ -3096,14 +3080,14 @@ with tab_qual:
                             border-left:5px solid {TE_AMBER};border-radius:10px;
                             padding:12px 18px;margin-top:6px;
                             display:flex;align-items:center;gap:10px">
-                  <span style="font-size:18px">ℹ️</span>
+                  <span style="font-size:18px"></span>
                   <span style="font-size:12px;color:#5d4037">
                     No changes detected compared to last save.
                   </span>
                 </div>
                 """, unsafe_allow_html=True)
 
-    # ── Summary section ───────────────────────────────────────────────────────
+    #  Summary section 
     if _qual_n > 0:
         st.markdown(f'<div class="te-section">Qualified Stops Summary</div>',
                     unsafe_allow_html=True)
@@ -3119,23 +3103,23 @@ with tab_qual:
 
         _qm1, _qm2, _qm3, _qm4 = st.columns(4)
         with _qm1:
-            st.metric("✅ Qualified Stops", f"{_qual_n} / {_stop_n}",
+            st.metric(" Qualified Stops", f"{_qual_n} / {_stop_n}",
                       delta=f"{_pct_q:.0f}% of total")
         with _qm2:
             _uid_n = int((_q_all.get("User ID", pd.Series(dtype=str))
                            .astype(str).str.strip()
                            .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
                            .notna()).sum())
-            st.metric("👤 With User ID", f"{_uid_n} rows",
+            st.metric(" With User ID", f"{_uid_n} rows",
                       delta="signed" if _uid_n > 0 else "none")
         with _qm3:
             _kf_n = int((_q_all.get("Key Failure", pd.Series(dtype=str))
                           .astype(str).str.strip()
                           .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
                           .notna()).sum())
-            st.metric("🔧 Key Failure filled", f"{_kf_n} rows")
+            st.metric(" Key Failure filled", f"{_kf_n} rows")
         with _qm4:
-            st.metric("💰 Spare Parts Cost", f"€ {_cost_total_q:,.2f}",
+            st.metric(" Spare Parts Cost", f"€ {_cost_total_q:,.2f}",
                       delta="recorded" if _cost_total_q > 0 else "no costs yet")
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -3150,21 +3134,21 @@ with tab_qual:
         _ec1, _ec2 = st.columns(2)
         with _ec1:
             st.download_button(
-                f"⬇ CSV — {_qual_n} QUALIFIED STOP(S)",
+                f" CSV — {_qual_n} QUALIFIED STOP(S)",
                 data=_q_all[_q_exp_cols].to_csv(
                     index=False, sep=";").encode("utf-8"),
                 file_name=f"TE_arrets_qualifies_{_ts}.csv",
                 mime="text/csv",
                 use_container_width=True)
         with _ec2:
-            st.info(f"📄 **{_qual_n}** qualified stop(s) · "
-                    f"Full PDF report available in **📊 KPIs** tab · "
+            st.info(f" **{_qual_n}** qualified stop(s) · "
+                    f"Full PDF report available in ** KPIs** tab · "
                     f"Data persisted to **{PERSISTENT_CSV}**")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 #  FOOTER
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 st.markdown(f"""
 <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;
             letter-spacing:2px;color:#C0A080;padding:24px 0 12px;
