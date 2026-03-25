@@ -1,14 +1,14 @@
 """
 
-  TE Connectivity — Stamping Department                                   
-  TPM Maintenance KPI Dashboard — Full Version + Persistent Storage      
-  Bruderer Presses S-001 → S-006 + Peripherals                           
-                                                                          
-  INSTALLATION:                                                           
-    pip install streamlit plotly pandas openpyxl numpy kaleido           
-                                                                          
-  RUN:                                                                    
-    streamlit run app.py                                                  
+  TE Connectivity — Stamping Department
+  Stamping CMMS — Full Version + Persistent Storage
+  Bruderer Presses S-001 → S-006 + Peripherals
+
+  INSTALLATION:
+    pip install streamlit plotly pandas openpyxl numpy kaleido reportlab
+
+  RUN:
+    streamlit run app.py
 
 """
 
@@ -24,24 +24,24 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  PAGE CONFIG
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="TE Connectivity — TPM Dashboard",
-    page_icon="",
+    page_title="TE Connectivity — Stamping CMMS",
+    page_icon="⚙",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  PERSISTENT STORAGE PATH
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 PERSISTENT_CSV = "tpm_data_persistent.csv"
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  COLONNES SOURCE (noms exacts du fichier Hydra)
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 COL_MACHINE   = "machine_id"
 COL_STATUS    = "machine_status_name"
 COL_DATE      = "plant_shift_date"
@@ -50,9 +50,9 @@ COL_MTBF      = "Sum of mtbf_numerator_seconds_quantity"
 COL_PROD      = "hydra_bmk_production_status_name"
 REQUIRED_COLS = [COL_MACHINE, COL_STATUS, COL_MTTR, COL_MTBF]
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  COULEURS TE CONNECTIVITY
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 TE_ORANGE  = "#E8650A"
 TE_ORANGE2 = "#F0934A"
 TE_ORANGE3 = "#F5B87A"
@@ -69,9 +69,9 @@ TE_AMBER   = "#E67E22"
 
 PALETTE = [TE_ORANGE, TE_NAVY, TE_RED, "#8E44AD", TE_GREEN, "#16A085", "#D4AC0D", TE_ORANGE2]
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  CSS GLOBAL
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
@@ -84,17 +84,9 @@ html, body, .stApp {{
 #MainMenu, footer, header {{ visibility: hidden; }}
 .block-container {{ padding-top: 0 !important; max-width: 100% !important; }}
 
-[data-testid="collapsedControl"] span {{
-    font-size: 0 !important; color: transparent !important;
-    visibility: hidden !important; width: 0 !important;
-    height: 0 !important; display: none !important;
-}}
-
 [data-testid="stSidebar"] {{
     background: linear-gradient(180deg, {TE_BLACK} 0%, #2A1A0A 100%) !important;
     border-right: 3px solid {TE_ORANGE} !important;
-    transform: none !important; left: 0 !important;
-    display: block !important; visibility: visible !important;
     min-width: 260px !important; max-width: 320px !important;
 }}
 [data-testid="stSidebar"] * {{
@@ -115,8 +107,7 @@ html, body, .stApp {{
     border-radius: 6px !important;
 }}
 [data-testid="stSidebar"] [data-testid="stMultiSelect"] span[data-baseweb="tag"] {{
-    background-color: {TE_ORANGE} !important;
-    border-radius: 4px !important;
+    background-color: {TE_ORANGE} !important; border-radius: 4px !important;
 }}
 [data-testid="stSidebar"] [data-testid="stMultiSelect"] span[data-baseweb="tag"] span {{
     color: white !important; font-weight: 700 !important; font-size: 11px !important;
@@ -133,11 +124,6 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] p,
 section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] span,
 section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] small {{
     color: #2e1808 !important; opacity: 1 !important; font-weight: 700 !important;
-}}
-section[data-testid="stSidebar"] div[data-testid="stFileUploader"] div[class*="uploadedFile"] {{
-    background-color: #2C1A0E !important;
-    border: 1px solid {TE_ORANGE} !important;
-    border-radius: 6px !important;
 }}
 
 .te-header {{
@@ -229,22 +215,6 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploader"] div[class*="u
     background: linear-gradient(90deg, {TE_ORANGE}, {TE_ORANGE3});
     border-radius: 12px 12px 0 0;
 }}
-.kpi-icon {{
-    width: 44px; height: 44px;
-    background: linear-gradient(135deg, #2C1A0A, #3D2510);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 14px; border: 1px solid #4A2A10; overflow: hidden;
-}}
-.kpi-icon .material-icons {{
-    font-family: 'Material Icons' !important;
-    font-size: 26px !important;
-    color: {TE_ORANGE} !important;
-    line-height: 1 !important;
-    display: block !important;
-    -webkit-font-feature-settings: 'liga';
-    font-feature-settings: 'liga';
-}}
 .kpi-label {{
     font-family: 'JetBrains Mono', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: 2.5px;
@@ -328,19 +298,36 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploader"] div[class*="u
     margin-top: 12px;
 }}
 
-.te-demo {{
-    background: linear-gradient(90deg, {TE_ORANGE} 0%, {TE_DARK} 100%);
-    border-radius: 9px; padding: 11px 18px; margin-bottom: 18px;
-    color: white; font-size: 13px; font-weight: 500;
-    box-shadow: 0 3px 14px rgba(232,101,10,0.28);
-    display: flex; align-items: center; gap: 10px;
+/* History page — dark TE style (matches Dashboard) */
+.hist-header {{
+    background: linear-gradient(135deg, {TE_BLACK} 0%, #2A1A0A 60%, #3D2508 100%);
+    border-radius: 14px; padding: 26px 36px; margin-bottom: 20px;
+    border-left: 6px solid {TE_ORANGE};
+    box-shadow: 0 8px 32px rgba(232,101,10,0.18);
+    position: relative; overflow: hidden;
 }}
-
-.welcome-card {{
-    background: {TE_WHITE}; border: 2px dashed #F0C8A0;
-    border-radius: 16px; padding: 52px 40px; text-align: center;
-    margin: 40px auto; max-width: 540px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+.hist-kpi-card {{
+    background: {TE_BLACK}; border-radius: 12px; padding: 22px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.30); border: 1px solid #2E2E2E;
+    position: relative; overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}}
+.hist-kpi-card::before {{
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, {TE_ORANGE}, {TE_ORANGE3});
+    border-radius: 12px 12px 0 0;
+}}
+.hist-kpi-label {{
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
+    color: {TE_ORANGE}; margin-bottom: 4px;
+}}
+.hist-kpi-value {{
+    font-family: 'Barlow Condensed', sans-serif; font-size: 34px;
+    font-weight: 700; color: {TE_WHITE}; line-height: 1;
+}}
+.hist-kpi-unit {{
+    font-size: 11px; color: {TE_BROWN}; font-weight: 500; margin-top: 4px;
 }}
 
 .stDownloadButton > button {{
@@ -391,74 +378,16 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploader"] div[class*="u
     border-radius: 10px !important; overflow: hidden !important;
 }}
 
-[data-testid="collapsedControl"] {{
-    display: flex !important; visibility: visible !important;
-    opacity: 1 !important; background: {TE_ORANGE} !important;
-    border-radius: 0 10px 10px 0 !important; width: 22px !important;
-    min-height: 60px !important; align-items: center !important;
-    justify-content: center !important; z-index: 9999 !important;
-    cursor: pointer !important; overflow: hidden !important;
-}}
-[data-testid="collapsedControl"] span,
-[data-testid="collapsedControl"] svg {{
-    display: none !important; width: 0 !important; height: 0 !important;
-    font-size: 0 !important; overflow: hidden !important;
-}}
-[data-testid="collapsedControl"]::before {{
-    content: "" !important; color: white !important;
-    font-size: 13px !important; font-weight: 900 !important;
-    font-family: Arial, sans-serif !important; line-height: 1 !important;
-    display: block !important;
-}}
-
-section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] button,
-section[data-testid="stSidebar"] [data-testid="stFileUploader"] button {{
-    background-color: #2e1808 !important;
-    color: {TE_ORANGE} !important;
-    border: 1px solid {TE_ORANGE} !important;
-    border-radius: 6px !important; font-weight: 700 !important;
-}}
-
-section[data-testid="stSidebar"] [data-testid="stDateInput"] input,
-section[data-testid="stSidebar"] input[type="text"] {{
-    color: #2e1808 !important; background: white !important;
-    font-weight: 700 !important;
-    border: 1.5px solid {TE_ORANGE} !important;
-    border-radius: 6px !important;
-}}
-
 ::-webkit-scrollbar {{ width: 5px; height: 5px; }}
 ::-webkit-scrollbar-track {{ background: #F0EAE3; }}
 ::-webkit-scrollbar-thumb {{ background: {TE_ORANGE3}; border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {TE_ORANGE}; }}
-
-/* History page styles */
-.hist-header {{
-    background: linear-gradient(135deg, {TE_NAVY} 0%, #0d1828 100%);
-    border-radius: 14px; padding: 24px 32px; margin-bottom: 20px;
-    border-left: 6px solid {TE_ORANGE};
-    box-shadow: 0 6px 24px rgba(27,42,74,0.25);
-}}
-.hist-kpi-card {{
-    background: {TE_NAVY}; border-radius: 10px; padding: 18px 20px;
-    border: 1px solid rgba(232,101,10,0.25);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-}}
-.hist-kpi-label {{
-    font-family: 'JetBrains Mono', monospace; font-size: 8px;
-    font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
-    color: {TE_ORANGE}; margin-bottom: 4px;
-}}
-.hist-kpi-value {{
-    font-family: 'Barlow Condensed', sans-serif; font-size: 28px;
-    font-weight: 700; color: {TE_WHITE}; line-height: 1;
-}}
 </style>
 """, unsafe_allow_html=True)
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  LISTES DÉROULANTES — Editable Table
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 SHIFTS = ["", "A (6-14h)", "B (14-22h)", "C (22-6h)"]
 
 KEY_FAILURES = [
@@ -486,73 +415,53 @@ _QUAL_COLS_DEFAULTS = [
     ("Total Part Cost",   0.0),
 ]
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  PERSISTENT STORAGE FUNCTIONS
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 
 def load_persistent() -> pd.DataFrame:
-    """Load the persistent CSV if it exists. Returns empty DataFrame otherwise."""
     if os.path.exists(PERSISTENT_CSV):
         try:
             df_p = pd.read_csv(PERSISTENT_CSV, low_memory=False)
             df_p.columns = [str(c).strip() for c in df_p.columns]
             return df_p
         except Exception as e:
-            st.warning(f" Could not read persistent file: {e}")
+            st.warning(f"⚠ Could not read persistent file: {e}")
     return pd.DataFrame()
 
 
 def save_persistent(df_to_save: pd.DataFrame):
-    """Save the full edited DataFrame to the persistent CSV on disk."""
     try:
         df_to_save.to_csv(PERSISTENT_CSV, index=False, encoding="utf-8")
     except Exception as e:
-        st.error(f" Could not save to disk: {e}")
+        st.error(f"✗ Could not save to disk: {e}")
 
 
 def merge_qualifications(df_new: pd.DataFrame,
                           df_persist: pd.DataFrame) -> pd.DataFrame:
-    """
-    When a new Hydra file is uploaded, try to reuse existing qualifications
-    from the persistent file by matching on machine_id + plant_shift_date + status.
-    Qualification columns are merged back into df_new.
-    """
     if df_persist.empty:
         return df_new
-
     QUAL_COLS = [c for c, _ in _QUAL_COLS_DEFAULTS]
     KEY_COLS  = [c for c in [COL_MACHINE, COL_DATE, COL_STATUS]
                  if c in df_new.columns and c in df_persist.columns]
-
     if not KEY_COLS:
         return df_new
-
-    # Keep only rows with at least one qualification filled
     _has_data = df_persist[
         [c for c in QUAL_COLS if c in df_persist.columns]
     ].apply(
-        lambda r: any(str(v).strip() not in ("", "nan", "None", "0", "0.0")
-                      for v in r),
+        lambda r: any(str(v).strip() not in ("", "nan", "None", "0", "0.0") for v in r),
         axis=1
     )
     df_qual_only = df_persist[_has_data].copy()
     if df_qual_only.empty:
         return df_new
-
-    # Normalise key columns to string for matching
     for _c in KEY_COLS:
         df_qual_only[_c] = df_qual_only[_c].astype(str).str.strip()
         df_new[_c]       = df_new[_c].astype(str).str.strip()
-
     _merge_cols = KEY_COLS + [c for c in QUAL_COLS if c in df_qual_only.columns]
     df_merged = df_new.merge(
         df_qual_only[_merge_cols].drop_duplicates(subset=KEY_COLS),
-        on=KEY_COLS,
-        how="left",
-        suffixes=("", "_PERSIST")
-    )
-
-    # Use persisted values where current values are blank
+        on=KEY_COLS, how="left", suffixes=("", "_PERSIST"))
     for _c in QUAL_COLS:
         _pc = f"{_c}_PERSIST"
         if _pc in df_merged.columns:
@@ -563,13 +472,11 @@ def merge_qualifications(df_new: pd.DataFrame,
                 ["", "nan", "None", str(_default)])
             df_merged.loc[_blank, _c] = df_merged.loc[_blank, _pc]
             df_merged.drop(columns=[_pc], inplace=True)
-
     return df_merged
 
-
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  DATA LOADING HELPERS
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 
 def load_data(f) -> pd.DataFrame:
     name = f.name.lower()
@@ -578,14 +485,13 @@ def load_data(f) -> pd.DataFrame:
             raw = f.read()
             sample = raw[:2048].decode("utf-8", errors="replace")
             sep = ";" if sample.count(";") >= sample.count(",") else ","
-            df = pd.read_csv(io.BytesIO(raw), sep=sep, encoding="utf-8",
-                             on_bad_lines="skip")
+            df = pd.read_csv(io.BytesIO(raw), sep=sep, encoding="utf-8", on_bad_lines="skip")
         else:
             df = pd.read_excel(f)
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except Exception as e:
-        st.error(f" File read error : `{e}`")
+        st.error(f"✗ File read error : `{e}`")
         return pd.DataFrame()
 
 
@@ -604,12 +510,11 @@ def sec_to_h(s):
     return round(float(s) / 3600.0, 4) if not pd.isna(s) else 0.0
 
 
-def dl_png(fig, filename, label=" Download PNG"):
+def dl_png(fig, filename, label="⬇ Download PNG"):
     try:
         img = fig.to_image(format="png", width=1400, height=680, scale=2)
-        st.download_button(label=label, data=img,
-                           file_name=filename, mime="image/png",
-                           use_container_width=True)
+        st.download_button(label=label, data=img, file_name=filename,
+                           mime="image/png", use_container_width=True)
     except Exception:
         st.caption("_`pip install kaleido` to enable PNG export_")
 
@@ -618,11 +523,9 @@ def export_excel(df: pd.DataFrame, kpi: dict) -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
-
     buf = io.BytesIO()
     try:
         wb = Workbook()
-
         def hdr_style(ws, row, col, value, bg="E8650A", fg="FFFFFF"):
             cell = ws.cell(row=row, column=col, value=value)
             cell.fill      = PatternFill("solid", fgColor=bg)
@@ -632,50 +535,44 @@ def export_excel(df: pd.DataFrame, kpi: dict) -> bytes:
                 left=Side(style="thin"), right=Side(style="thin"),
                 top=Side(style="thin"), bottom=Side(style="thin"))
             return cell
-
         def title_style(ws, row, col, value):
             cell = ws.cell(row=row, column=col, value=value)
             cell.font = Font(bold=True, color="1B2A4A", name="Arial", size=15)
             return cell
-
         def auto_width(ws):
             for col in ws.columns:
                 max_w = max((len(str(c.value or "")) for c in col), default=10)
                 ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_w + 4, 50)
-
         ws1 = wb.active
         ws1.title = "KPI Summary"
         ws1.row_dimensions[1].height = 22
-        title_style(ws1, 1, 1, "TE Connectivity — Stamping KPI Report")
+        title_style(ws1, 1, 1, "TE Connectivity — Stamping CMMS Report")
         ws1.cell(2, 1, f"Generated on: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-        hdr_style(ws1, 4, 1, "Indicateur")
-        hdr_style(ws1, 4, 2, "Valeur")
+        hdr_style(ws1, 4, 1, "Indicator")
+        hdr_style(ws1, 4, 2, "Value")
         kpi_rows = [
-            ("Availability globale (%)",  f"{kpi['dispo']:.2f}%"),
-            ("Avg MTTR / stop (h)",        f"{kpi['mttr_mean_h']:.4f} h"),
-            ("MTBF Moyen (h)",             f"{kpi['mtbf_mean_h']:.4f} h"),
-            ("Total stops",               str(kpi['nb_arrets'])),
-            ("Cumulative MTTR (h)",        f"{kpi['mttr_total_h']:.2f} h"),
-            ("Cumulative MTBF (h)",        f"{kpi['mtbf_total_h']:.2f} h"),
-            ("Total events analyzed",      str(kpi['nb_rows'])),
+            ("Availability (%)",       f"{kpi['dispo']:.2f}%"),
+            ("Mean MTTR / stop (h)",   f"{kpi['mttr_mean_h']:.4f} h"),
+            ("Mean MTBF (h)",          f"{kpi['mtbf_mean_h']:.4f} h"),
+            ("Total Failures",         str(kpi['nb_arrets'])),
+            ("Cumulative Downtime (h)",f"{kpi['mttr_total_h']:.2f} h"),
+            ("Cumulative Uptime (h)",  f"{kpi['mtbf_total_h']:.2f} h"),
+            ("Total events analyzed",  str(kpi['nb_rows'])),
         ]
         for i, (k, v) in enumerate(kpi_rows, start=5):
             ws1.cell(i, 1, k)
             ws1.cell(i, 2, v)
         auto_width(ws1)
-
         if "by_machine" in kpi and not kpi["by_machine"].empty:
-            ws2 = wb.create_sheet("Par Machine")
+            ws2 = wb.create_sheet("By Machine")
             bm  = kpi["by_machine"].copy()
-            bm.columns = ["Machine","Total MTTR (h)","Total MTBF (h)",
-                          "Events","Availability (%)"]
+            bm.columns = ["Machine","Mean MTTR (h)","Mean MTBF (h)","Failures","Availability (%)"]
             for ci, col_name in enumerate(bm.columns, start=1):
                 hdr_style(ws2, 1, ci, col_name, bg="1B2A4A")
             for ri, row_vals in enumerate(bm.itertuples(index=False), start=2):
                 for ci, v in enumerate(row_vals, start=1):
                     ws2.cell(ri, ci, round(v, 4) if isinstance(v, float) else v)
             auto_width(ws2)
-
         if "pareto" in kpi and not kpi["pareto"].empty:
             ws3 = wb.create_sheet("Pareto Downtime")
             par = kpi["pareto"]
@@ -685,8 +582,7 @@ def export_excel(df: pd.DataFrame, kpi: dict) -> bytes:
                 for ci, v in enumerate(row_vals, start=1):
                     ws3.cell(ri, ci, round(v, 4) if isinstance(v, float) else v)
             auto_width(ws3)
-
-        ws4      = wb.create_sheet("Filtered Data")
+        ws4 = wb.create_sheet("Filtered Data")
         exp_cols = [c for c in [COL_MACHINE, COL_DATE, COL_STATUS,
                                 "mttr_h", "mtbf_h"] if c in df.columns]
         for ci, col_name in enumerate(exp_cols, start=1):
@@ -695,16 +591,15 @@ def export_excel(df: pd.DataFrame, kpi: dict) -> bytes:
             for ci, v in enumerate(row_vals, start=1):
                 ws4.cell(ri, ci, str(v) if not isinstance(v, (int, float)) else v)
         auto_width(ws4)
-
         wb.save(buf)
     except Exception as e:
-        st.error(f"Erreur export Excel : {e}")
+        st.error(f"Excel export error: {e}")
     return buf.getvalue()
 
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  PLOTLY BASE LAYOUT
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 PL = dict(
     plot_bgcolor=TE_WHITE, paper_bgcolor=TE_WHITE,
     font=dict(family="Barlow, sans-serif", color="#4A3020", size=11),
@@ -730,11 +625,10 @@ def _hex_to_rgba(hex_color: str, alpha: float = 0.1) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  SIDEBAR
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-
     st.markdown(f"""
     <div style="background:rgba(232,101,10,0.12);border:1px solid rgba(232,101,10,0.35);
                 border-radius:10px;padding:12px 14px;margin-bottom:16px">
@@ -743,37 +637,31 @@ with st.sidebar:
             ≡ TE CONNECTIVITY
         </div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:7px;
-                    letter-spacing:2px;color:rgba(255,255,255,0.18);margin-top:4px">
-            TPM KPI DASHBOARD
+                    letter-spacing:2px;color:rgba(255,255,255,0.4);margin-top:4px">
+            STAMPING CMMS
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    #  Navigation 
     st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                 f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                f' NAVIGATION</p>', unsafe_allow_html=True)
+                f'⊞ NAVIGATION</p>', unsafe_allow_html=True)
 
     nav_choice = st.radio(
         "",
-        options=[" Dashboard", " Historique"],
-        index=0,
-        key="nav_radio",
-        label_visibility="collapsed"
+        options=["⚙ Dashboard", "📋 History"],
+        index=0, key="nav_radio", label_visibility="collapsed"
     )
 
     st.markdown("---")
 
-    #  Import Data 
     st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                 f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                f' IMPORT DATA</p>', unsafe_allow_html=True)
+                f'⬆ IMPORT DATA</p>', unsafe_allow_html=True)
 
     uploaded = st.file_uploader(
-        "",
-        type=["csv", "xlsx", "xls"],
-        key="sidebar_uploader",
-        label_visibility="collapsed"
+        "", type=["csv", "xlsx", "xls"],
+        key="sidebar_uploader", label_visibility="collapsed"
     )
 
     st.markdown("---")
@@ -781,13 +669,13 @@ with st.sidebar:
     if uploaded is not None:
         st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                     f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                    f' FILTERS</p>', unsafe_allow_html=True)
+                    f'⊟ FILTERS</p>', unsafe_allow_html=True)
 
 
-# 
-#  PAGE: HISTORIQUE
-# 
-if nav_choice == " Historique":
+# ══════════════════════════════════════════════════════════════════════════════
+#  PAGE: HISTORY
+# ══════════════════════════════════════════════════════════════════════════════
+if nav_choice == "📋 History":
 
     st.markdown(f"""
     <div class="hist-header">
@@ -798,13 +686,13 @@ if nav_choice == " Historique":
                       color:{TE_ORANGE};margin-bottom:6px">
             Stamping Department · Bruderer Presses
           </div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:38px;
                       font-weight:800;color:{TE_WHITE};text-transform:uppercase;
-                      letter-spacing:0.5px;margin-bottom:4px">
-             Historique des <span style="color:{TE_ORANGE}">Arrêts Qualifiés</span>
+                      letter-spacing:0.5px;margin-bottom:4px;line-height:1.0">
+            QUALIFIED STOPS <span style="color:{TE_ORANGE}">HISTORY</span>
           </div>
-          <div style="font-size:12px;color:{TE_BROWN};">
-            Données persistantes lues depuis <code style="color:{TE_ORANGE2}">{PERSISTENT_CSV}</code>
+          <div style="font-size:12px;color:{TE_BROWN};margin-top:4px">
+            Persistent data loaded from <code style="color:{TE_ORANGE2};background:rgba(232,101,10,0.12);padding:2px 6px;border-radius:4px">{PERSISTENT_CSV}</code>
           </div>
         </div>
         <div style="text-align:right">
@@ -821,94 +709,86 @@ if nav_choice == " Historique":
         st.markdown(f"""
         <div style="background:{TE_WHITE};border:2px dashed #F0C8A0;border-radius:14px;
                     padding:48px;text-align:center;margin:32px auto;max-width:480px">
-          <div style="font-size:40px;margin-bottom:12px"></div>
+          <div style="font-size:40px;margin-bottom:12px">📂</div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;
                       font-weight:800;color:{TE_BLACK};text-transform:uppercase;
                       margin-bottom:8px">No History Yet</div>
           <div style="font-size:13px;color:#9A7A60;line-height:1.7">
             No persistent data found.<br>
             Import a Hydra file, qualify some stops<br>
-            and click <strong> Save Changes</strong> to populate this page.
+            and click <strong>💾 Save Changes</strong> to populate this page.
           </div>
         </div>
         """, unsafe_allow_html=True)
         st.stop()
 
     # Build columns available
-    QUAL_CHECK = ["Shift", "Key Failure", "Issue Description",
-                  "Action Taken", "Spare Part Ref"]
+    QUAL_CHECK = ["Shift", "Key Failure", "Issue Description", "Action Taken", "Spare Part Ref"]
 
     def _is_qualified_hist(r):
         return any(str(r.get(c, "")).strip() not in ("", "None", "nan")
                    for c in QUAL_CHECK if c in r.index)
 
-    # Filter only qualified stops
     _stop_mask = pd.to_numeric(df_hist.get("mttr_h", pd.Series(dtype=float)),
                                errors="coerce").fillna(0) > 0
-    df_stops_hist = df_hist[_stop_mask].copy() if "mttr_h" in df_hist.columns \
-        else df_hist.copy()
+    df_stops_hist = df_hist[_stop_mask].copy() if "mttr_h" in df_hist.columns else df_hist.copy()
+    _qual_mask = df_stops_hist.apply(_is_qualified_hist, axis=1) if not df_stops_hist.empty else pd.Series(dtype=bool)
+    df_qualified_hist = df_stops_hist[_qual_mask].copy() if len(_qual_mask) > 0 else pd.DataFrame()
 
-    _qual_mask = df_stops_hist.apply(_is_qualified_hist, axis=1) \
-        if not df_stops_hist.empty else pd.Series(dtype=bool)
-    df_qualified_hist = df_stops_hist[_qual_mask].copy() \
-        if len(_qual_mask) > 0 else pd.DataFrame()
-
-    #  Summary KPIs 
-    _tot_rows   = len(df_hist)
-    _tot_stops  = len(df_stops_hist)
-    _tot_qual   = len(df_qualified_hist)
-    _tot_cost   = float(
+    # ── Summary KPIs ──
+    _tot_rows  = len(df_hist)
+    _tot_stops = len(df_stops_hist)
+    _tot_qual  = len(df_qualified_hist)
+    _tot_cost  = float(
         pd.to_numeric(df_hist.get("Total Part Cost", pd.Series([0.0])),
                       errors="coerce").fillna(0).sum()
     ) if "Total Part Cost" in df_hist.columns else 0.0
-    _pct_qual   = (_tot_qual / _tot_stops * 100) if _tot_stops > 0 else 0.0
+    _pct_qual  = (_tot_qual / _tot_stops * 100) if _tot_stops > 0 else 0.0
 
     hc1, hc2, hc3, hc4 = st.columns(4)
     for _col, _lbl, _val, _unit in [
-        (hc1, "TOTAL EVENTS",      str(_tot_rows),                        "in persistent file"),
-        (hc2, "TOTAL STOPS",       str(_tot_stops),                       "with MTTR > 0"),
-        (hc3, "QUALIFIED STOPS",   f"{_tot_qual} ({_pct_qual:.0f}%)",     "shift + key failure"),
-        (hc4, "SPARE PARTS COST",  f"€ {_tot_cost:,.2f}",                "total recorded"),
+        (hc1, "TOTAL EVENTS",    str(_tot_rows),                        "in persistent file"),
+        (hc2, "TOTAL STOPS",     str(_tot_stops),                       "with MTTR > 0"),
+        (hc3, "QUALIFIED STOPS", f"{_tot_qual} ({_pct_qual:.0f}%)",     "shift + key failure"),
+        (hc4, "SPARE PARTS COST",f"€ {_tot_cost:,.2f}",                "total recorded"),
     ]:
         with _col:
             st.markdown(f"""
             <div class="hist-kpi-card">
               <div class="hist-kpi-label">{_lbl}</div>
               <div class="hist-kpi-value">{_val}</div>
-              <div style="font-size:10px;color:{TE_BROWN};margin-top:4px">{_unit}</div>
+              <div class="hist-kpi-unit">{_unit}</div>
             </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     if df_qualified_hist.empty:
-        st.info("No qualified stops in the persistent file yet. "
-                "Fill in Shift/Key Failure in the Dashboard and Save Changes.")
+        st.info("No qualified stops in the persistent file yet. Fill in Shift/Key Failure in the Dashboard and Save Changes.")
         st.stop()
 
-    #  Filters 
-    st.markdown(f'<div class="te-section"> Filter History</div>',
-                unsafe_allow_html=True)
+    # ── FILTER HISTORY ──
+    st.markdown(f'<div class="te-section">⊟ FILTER HISTORY</div>', unsafe_allow_html=True)
     _hf1, _hf2, _hf3 = st.columns(3)
 
     with _hf1:
         _hmachines = ["All"] + sorted(
             df_qualified_hist[COL_MACHINE].dropna().unique().tolist()
         ) if COL_MACHINE in df_qualified_hist.columns else ["All"]
-        _hfm = st.selectbox(" Machine", _hmachines, key="hist_machine")
+        _hfm = st.selectbox("⚙ Machine", _hmachines, key="hist_machine")
 
     with _hf2:
         _hkf_opts = ["All"] + sorted(
             df_qualified_hist["Key Failure"].dropna()
-            .replace({"":"N/A","nan":"N/A"}).unique().tolist()
+            .replace({"": "N/A", "nan": "N/A"}).unique().tolist()
         ) if "Key Failure" in df_qualified_hist.columns else ["All"]
-        _hfkf = st.selectbox(" Key Failure", _hkf_opts, key="hist_kf")
+        _hfkf = st.selectbox("🔧 Key Failure", _hkf_opts, key="hist_kf")
 
     with _hf3:
         _hshift_opts = ["All"] + sorted(
             df_qualified_hist["Shift"].dropna()
-            .replace({"":"N/A"}).unique().tolist()
+            .replace({"": "N/A"}).unique().tolist()
         ) if "Shift" in df_qualified_hist.columns else ["All"]
-        _hfsh = st.selectbox(" Shift", _hshift_opts, key="hist_shift")
+        _hfsh = st.selectbox("🕐 Shift", _hshift_opts, key="hist_shift")
 
     _dh = df_qualified_hist.copy()
     if _hfm != "All" and COL_MACHINE in _dh.columns:
@@ -925,9 +805,8 @@ if nav_choice == " Historique":
         f' qualified stop(s)</div>',
         unsafe_allow_html=True)
 
-    #  Table 
-    st.markdown(f'<div class="te-section"> Qualified Stops Table</div>',
-                unsafe_allow_html=True)
+    # ── QUALIFIED STOPS TABLE ──
+    st.markdown(f'<div class="te-section">📋 QUALIFIED STOPS TABLE</div>', unsafe_allow_html=True)
 
     _hist_disp_cols = [c for c in [
         COL_MACHINE, COL_DATE, COL_STATUS, "mttr_h",
@@ -942,28 +821,17 @@ if nav_choice == " Historique":
             _dh_show[COL_DATE], errors="coerce"
         ).dt.strftime("%m/%d/%Y").fillna("—")
     if "mttr_h" in _dh_show.columns:
-        _dh_show["mttr_h"] = pd.to_numeric(
-            _dh_show["mttr_h"], errors="coerce").round(4)
-
-    def _style_hist_dispo(val):
-        try:
-            v = float(val)
-            if v >= 95: return "background:#d5f5e3;color:#1e8449;font-weight:700"
-            if v >= 90: return "background:#fef9e7;color:#d68910;font-weight:700"
-            return "background:#fdf2f2;color:#c0392b;font-weight:700"
-        except: return ""
+        _dh_show["mttr_h"] = pd.to_numeric(_dh_show["mttr_h"], errors="coerce").round(4)
 
     st.dataframe(
         _dh_show.reset_index(drop=True),
-        use_container_width=True,
-        hide_index=True,
+        use_container_width=True, hide_index=True,
         height=min(700, max(300, len(_dh_show) * 40 + 52))
     )
 
-    #  Charts 
+    # ── Charts ──
     if len(_dh) >= 2:
-        st.markdown(f'<div class="te-section"> Analysis</div>',
-                    unsafe_allow_html=True)
+        st.markdown(f'<div class="te-section">📊 ANALYSIS</div>', unsafe_allow_html=True)
         _ch1, _ch2 = st.columns(2)
 
         with _ch1:
@@ -973,26 +841,21 @@ if nav_choice == " Historique":
                         unsafe_allow_html=True)
             if "Key Failure" in _dh.columns:
                 _kf_ct = (
-                    _dh["Key Failure"].replace({"": "N/A","nan":"N/A"})
+                    _dh["Key Failure"].replace({"": "N/A", "nan": "N/A"})
                     .value_counts().head(10).reset_index()
                 )
-                _kf_ct.columns = ["Key Failure","Count"]
+                _kf_ct.columns = ["Key Failure", "Count"]
                 _fig_kf = go.Figure(go.Bar(
-                    x=_kf_ct["Count"],
-                    y=_kf_ct["Key Failure"],
-                    orientation="h",
-                    marker=dict(
-                        color=[TE_ORANGE if i == 0 else TE_NAVY
-                               for i in range(len(_kf_ct))],
-                        line=dict(width=0)),
+                    x=_kf_ct["Count"], y=_kf_ct["Key Failure"], orientation="h",
+                    marker=dict(color=[TE_ORANGE if i == 0 else TE_BLACK
+                                       for i in range(len(_kf_ct))],
+                                line=dict(width=0)),
                     hovertemplate="<b>%{y}</b><br>Count: %{x}<extra></extra>"
                 ))
                 apply(_fig_kf, height=320, showlegend=False,
                       margin=dict(l=10, r=10, t=20, b=20),
-                      xaxis=dict(gridcolor="#F0E8E0",
-                                 tickfont=dict(size=9, color="#9A7A60")),
-                      yaxis=dict(showgrid=False,
-                                 tickfont=dict(size=10, color="#4A3020")))
+                      xaxis=dict(gridcolor="#F0E8E0", tickfont=dict(size=9, color="#9A7A60")),
+                      yaxis=dict(showgrid=False, tickfont=dict(size=10, color="#4A3020")))
                 st.plotly_chart(_fig_kf, use_container_width=True, config=PCONF)
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1003,57 +866,97 @@ if nav_choice == " Historique":
                         unsafe_allow_html=True)
             if COL_MACHINE in _dh.columns:
                 _mac_ct = _dh[COL_MACHINE].value_counts().reset_index()
-                _mac_ct.columns = ["Machine","Stops"]
+                _mac_ct.columns = ["Machine", "Stops"]
                 _fig_mac = go.Figure(go.Bar(
-                    x=_mac_ct["Machine"],
-                    y=_mac_ct["Stops"],
-                    marker=dict(
-                        color=[PALETTE[i % len(PALETTE)]
-                               for i in range(len(_mac_ct))],
-                        line=dict(width=0)),
+                    x=_mac_ct["Machine"], y=_mac_ct["Stops"],
+                    marker=dict(color=[PALETTE[i % len(PALETTE)]
+                                       for i in range(len(_mac_ct))],
+                                line=dict(width=0)),
                     hovertemplate="<b>%{x}</b><br>Stops: %{y}<extra></extra>"
                 ))
                 apply(_fig_mac, height=320, showlegend=False,
                       margin=dict(l=10, r=10, t=20, b=20),
-                      xaxis=dict(showgrid=False,
-                                 tickfont=dict(size=10, color="#4A3020")),
-                      yaxis=dict(gridcolor="#F0E8E0",
-                                 tickfont=dict(size=9, color="#9A7A60")))
+                      xaxis=dict(showgrid=False, tickfont=dict(size=10, color="#4A3020")),
+                      yaxis=dict(gridcolor="#F0E8E0", tickfont=dict(size=9, color="#9A7A60")))
                 st.plotly_chart(_fig_mac, use_container_width=True, config=PCONF)
             st.markdown("</div>", unsafe_allow_html=True)
 
-    #  Export 
-    st.markdown(f'<div class="te-section"> Export History</div>',
-                unsafe_allow_html=True)
+    # ── EXPORT HISTORY ──
+    st.markdown(f'<div class="te-section">⬇ EXPORT HISTORY</div>', unsafe_allow_html=True)
     _exp1, _exp2 = st.columns(2)
     _ts_hist = datetime.now().strftime("%Y%m%d_%H%M")
     with _exp1:
         st.download_button(
-            " CSV — QUALIFIED HISTORY",
-            data=_dh[_hist_disp_cols].to_csv(
-                index=False, sep=";").encode("utf-8"),
+            "⬇ CSV — QUALIFIED HISTORY",
+            data=_dh[_hist_disp_cols].to_csv(index=False, sep=";").encode("utf-8"),
             file_name=f"TE_History_Qualified_{_ts_hist}.csv",
-            mime="text/csv",
-            use_container_width=True
+            mime="text/csv", use_container_width=True
         )
     with _exp2:
         st.download_button(
-            " CSV — FULL PERSISTENT DATA",
+            "⬇ CSV — FULL PERSISTENT DATA",
             data=df_hist.to_csv(index=False, sep=";").encode("utf-8"),
             file_name=f"TE_Persistent_Full_{_ts_hist}.csv",
-            mime="text/csv",
-            use_container_width=True
+            mime="text/csv", use_container_width=True
         )
+
+    # ── RESET HISTORY ──
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f'<div class="te-section">🗑 DANGER ZONE</div>', unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div style="background:#1a0a0a;border:2px solid {TE_RED};border-radius:12px;
+                padding:18px 24px;margin-bottom:12px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;
+                  color:{TE_RED};text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">
+        🗑 Reset History
+      </div>
+      <div style="font-size:12px;color:#C0A080;line-height:1.7">
+        This will permanently delete <strong style="color:{TE_WHITE}">{PERSISTENT_CSV}</strong>
+        and all {len(df_hist):,} rows of saved data. This action <strong style="color:{TE_RED}">cannot be undone</strong>.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if "confirm_reset" not in st.session_state:
+        st.session_state.confirm_reset = False
+
+    _r1, _r2, _r3 = st.columns([2, 1.5, 2])
+    with _r2:
+        if st.button("🗑️ Reset History", key="btn_reset_trigger",
+                     help="Permanently delete all persistent data"):
+            st.session_state.confirm_reset = True
+
+    if st.session_state.confirm_reset:
+        st.warning(
+            f"⚠️ **Are you sure?**  \n"
+            f"This will delete **{len(df_hist):,} rows** from `{PERSISTENT_CSV}`.  \n"
+            f"This action **cannot be undone**."
+        )
+        _confirm1, _confirm2, _confirm3 = st.columns([2, 1, 2])
+        with _confirm1:
+            if st.button("✅ Yes, Delete Everything", key="btn_reset_confirm",
+                         help="Confirm permanent deletion"):
+                try:
+                    os.remove(PERSISTENT_CSV)
+                    st.session_state.confirm_reset = False
+                    st.session_state.edited_df = None
+                    st.success("✅ History deleted successfully. The persistent file has been removed.")
+                    st.rerun()
+                except Exception as _e:
+                    st.error(f"✗ Could not delete file: {_e}")
+        with _confirm2:
+            if st.button("✗ Cancel", key="btn_reset_cancel"):
+                st.session_state.confirm_reset = False
+                st.rerun()
 
     st.stop()
 
 
-# 
+# ══════════════════════════════════════════════════════════════════════════════
 #  PAGE: DASHBOARD (default)
-#  From here, nav_choice == " Dashboard"
-# 
+# ══════════════════════════════════════════════════════════════════════════════
 
-#  Welcome screen if no file uploaded 
 if uploaded is None:
     df_persist_check = load_persistent()
     _persist_info = ""
@@ -1062,11 +965,10 @@ if uploaded is None:
             f'<div style="background:#eafaf1;border:1.5px solid #a9dfbf;'
             f'border-radius:8px;padding:10px 16px;margin-top:12px;'
             f'font-size:12px;color:#145a32">'
-            f' Persistent file found: <strong>{len(df_persist_check):,} rows</strong>'
+            f'✅ Persistent file found: <strong>{len(df_persist_check):,} rows</strong>'
             f' — import a Hydra file to continue with saved qualifications.'
             f'</div>'
         )
-
     st.markdown(f"""
     <div style="display:flex;justify-content:center;margin-top:60px">
     <div style="background:white;border:2px dashed #F0C8A0;border-radius:18px;
@@ -1080,7 +982,7 @@ if uploaded is None:
         </div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;
                     font-weight:800;color:#1C1C1C;text-transform:uppercase;
-                    letter-spacing:1px;margin-bottom:12px">TPM KPI Dashboard</div>
+                    letter-spacing:1px;margin-bottom:12px">Stamping CMMS</div>
         <div style="font-size:13px;color:#9A7A60;margin-bottom:20px;line-height:1.7">
             Import your Hydra MES file<br>
             to visualize the maintenance KPIs of Bruderer presses.
@@ -1102,14 +1004,13 @@ if uploaded is None:
     st.stop()
 
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  DATA PREP — Load file + merge with persistent qualifications
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 
-# Reset editable table if new file uploaded
 if "last_file" not in st.session_state or st.session_state.last_file != uploaded.name:
-    st.session_state.last_file  = uploaded.name
-    st.session_state.edited_df  = None
+    st.session_state.last_file = uploaded.name
+    st.session_state.edited_df = None
 
 df_raw = load_data(uploaded)
 if df_raw.empty:
@@ -1125,20 +1026,16 @@ if missing:
     )
     st.stop()
 
-#  Add qualification columns if absent 
 for _qc, _qd in _QUAL_COLS_DEFAULTS:
     if _qc not in df_raw.columns:
         df_raw[_qc] = _qd
 
-#  Init session_state.edited_df with persistence merge 
 if st.session_state.edited_df is None:
     _df_persist = load_persistent()
     if not _df_persist.empty:
-        # Try to re-use qualifications from disk
         df_raw = merge_qualifications(df_raw, _df_persist)
     st.session_state.edited_df = df_raw.copy()
 
-#  Ensure existing blank User IDs get "TE" prefix & new cost cols exist 
 _edf = st.session_state.edited_df
 if "User ID" in _edf.columns:
     _blank_uid = _edf["User ID"].astype(str).str.strip().isin(["", "nan", "None"])
@@ -1165,6 +1062,7 @@ if has_mtbf:
 else:
     df_raw[COL_MTBF] = 0.0
 
+# Convert seconds to hours — these are raw per-event values
 df_raw["mttr_h"] = df_raw[COL_MTTR] / 3600.0
 df_raw["mtbf_h"] = df_raw[COL_MTBF] / 3600.0 if has_mtbf else 0.0
 
@@ -1172,14 +1070,12 @@ if "Manual Duration (min)" in df_raw.columns:
     dur_mask = df_raw["Manual Duration (min)"].notna() & (df_raw["Manual Duration (min)"] > 0)
     df_raw.loc[dur_mask, "mttr_h"] = df_raw.loc[dur_mask, "Manual Duration (min)"] / 60.0
 
-#  Date parsing 
+# Date parsing
 if COL_DATE in df_raw.columns:
     raw_dates = df_raw[COL_DATE].astype(str)
     parsed    = pd.Series([pd.NaT] * len(df_raw), dtype="datetime64[ns]")
-
     formats_to_try = [
-        "%m/%d/%Y %H:%M", "%m/%d/%Y",
-        "%m-%d-%Y %H:%M", "%m-%d-%Y",
+        "%m/%d/%Y %H:%M", "%m/%d/%Y", "%m-%d-%Y %H:%M", "%m-%d-%Y",
         "%-m/%-d/%Y", "%#m/%#d/%Y",
     ]
     for fmt_str in formats_to_try:
@@ -1190,28 +1086,23 @@ if COL_DATE in df_raw.columns:
                 raw_dates[mask], format=fmt_str, errors="coerce", dayfirst=False)
         except Exception:
             pass
-
     mask = parsed.isna()
     if mask.any():
-        parsed[mask] = pd.to_datetime(
-            raw_dates[mask], errors="coerce", dayfirst=False)
-
+        parsed[mask] = pd.to_datetime(raw_dates[mask], errors="coerce", dayfirst=False)
     df_raw[COL_DATE] = parsed
     df_raw["date_only"] = df_raw[COL_DATE].dt.normalize()
     if df_raw["date_only"].notna().sum() == 0:
-        st.warning(f" Column `{COL_DATE}`: no valid date parsed.")
+        st.warning(f"⚠ Column `{COL_DATE}`: no valid date parsed.")
 
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  SIDEBAR FILTERS
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     all_machines = sorted(df_raw[COL_MACHINE].dropna().unique().tolist())
     sel_machines = st.multiselect(
-        "Machines", options=all_machines, default=all_machines,
-        placeholder="Select…"
+        "Machines", options=all_machines, default=all_machines, placeholder="Select…"
     )
-
     if "date_only" in df_raw.columns:
         valid_d = df_raw["date_only"].dropna()
         if len(valid_d):
@@ -1231,15 +1122,15 @@ with st.sidebar:
     st.markdown(f"""
     <div style="font-size:10px;color:rgba(255,255,255,0.3);
                 font-family:'JetBrains Mono',monospace;letter-spacing:1px">
-         {uploaded.name}<br>
-         {len(df_raw):,} rows<br>
-         Persistent: {" " + str(os.path.exists(PERSISTENT_CSV)) if os.path.exists(PERSISTENT_CSV) else " none"}<br><br>
+        📄 {uploaded.name}<br>
+        📊 {len(df_raw):,} rows<br>
+        💾 Persistent: {"✅ " + str(os.path.exists(PERSISTENT_CSV)) if os.path.exists(PERSISTENT_CSV) else "✗ none"}<br><br>
         TE CONNECTIVITY © {datetime.now().year}
     </div>
     """, unsafe_allow_html=True)
 
 if not sel_machines:
-    st.warning(" Please select at least one machine.")
+    st.warning("⚠ Please select at least one machine.")
     st.stop()
 
 df = df_raw[df_raw[COL_MACHINE].isin(sel_machines)].copy()
@@ -1251,56 +1142,79 @@ if df.empty:
     st.stop()
 
 
-# 
-#  KPI CALCULATIONS
-# 
-mt_total = df["mttr_h"].sum()
-mb_total = df["mtbf_h"].sum()
+# ──────────────────────────────────────────────────────────────────────────────
+#  KPI CALCULATIONS — MEAN-BASED (MTTR = Mean Time To Repair, MTBF = Mean Time Between Failures)
+#
+#  For each machine:
+#    nb_failures    = number of events where mttr_h > 0
+#    mean_mttr      = Total Downtime / nb_failures           (MTTR definition)
+#    mean_mtbf      = Total Uptime   / nb_failures           (MTBF definition)
+#    availability   = mean_mtbf / (mean_mtbf + mean_mttr)   (standard formula)
+#
+#  Global KPIs aggregate means across all selected machines.
+# ──────────────────────────────────────────────────────────────────────────────
 
-if has_mtbf and mb_total > 0:
-    total = mt_total + mb_total
-    dispo = round(mb_total / total * 100, 2)
-    dispo_mode = "MTBF"
+stop_rows = df[df["mttr_h"] > 0].copy()
+nb_arrets = len(stop_rows)  # number of failures
+
+# Total downtime / uptime across all selected data
+mt_total = df["mttr_h"].sum()          # total downtime hours
+mb_total = df["mtbf_h"].sum()          # total uptime hours
+
+# ── MEAN MTTR = total downtime / number of failures
+mttr_mean_h = round(mt_total / nb_arrets, 4) if nb_arrets > 0 else 0.0
+
+# ── MEAN MTBF = total uptime / number of failures (only if MTBF data exists)
+if has_mtbf and nb_arrets > 0:
+    mtbf_mean_h = round(mb_total / nb_arrets, 4)
 else:
-    prod_mask = df[COL_STATUS].str.upper().str.contains("PRODUCTION", na=False)
-    n_prod    = prod_mask.sum()
-    n_total   = len(df)
-    dispo     = round(n_prod / n_total * 100, 2) if n_total > 0 else 100.0
-    dispo_mode = "STATUS"
+    mtbf_mean_h = 0.0
 
-stop_rows   = df[df["mttr_h"] > 0]
-mttr_mean_h = round(stop_rows["mttr_h"].mean(), 4) if len(stop_rows) > 0 else 0.0
-mtbf_mean_h = round(df["mtbf_h"].mean(), 4) if has_mtbf else 0.0
-nb_arrets   = len(stop_rows)
-
-ma = df.groupby(COL_MACHINE, as_index=False).agg(
-    tm=("mttr_h","sum"), tb=("mtbf_h","sum"), nb_evt=("mttr_h","count"))
-
-if has_mtbf and mb_total > 0:
-    ma["dispo"] = ma.apply(
-        lambda r: round(r["tb"]/(r["tb"]+r["tm"])*100, 1)
-        if (r["tb"]+r["tm"]) > 0 else 100.0, axis=1)
+# ── AVAILABILITY = MTBF / (MTBF + MTTR)
+if has_mtbf and (mtbf_mean_h + mttr_mean_h) > 0:
+    dispo = round(mtbf_mean_h / (mtbf_mean_h + mttr_mean_h) * 100, 2)
+    dispo_mode = "MTBF-based"
 else:
-    prod_per_mac = (
-        df[df[COL_STATUS].str.upper().str.contains("PRODUCTION", na=False)]
-        .groupby(COL_MACHINE).size().reset_index(name="n_prod")
-    )
-    total_per_mac = df.groupby(COL_MACHINE).size().reset_index(name="n_total")
-    ratio = prod_per_mac.merge(total_per_mac, on=COL_MACHINE, how="right").fillna(0)
-    ratio["dispo"] = (ratio["n_prod"] / ratio["n_total"] * 100).round(1)
-    ma = ma.merge(ratio[[COL_MACHINE, "dispo"]], on=COL_MACHINE, how="left")
-    ma["dispo"] = ma["dispo"].fillna(0.0)
+    # Fallback: production status ratio
+    prod_mask  = df[COL_STATUS].str.upper().str.contains("PRODUCTION", na=False)
+    n_prod     = prod_mask.sum()
+    n_total    = len(df)
+    dispo      = round(n_prod / n_total * 100, 2) if n_total > 0 else 100.0
+    dispo_mode = "Status-based"
 
-pareto = df[df["mttr_h"]>0].groupby(COL_MACHINE)["mttr_h"].sum().reset_index()
-pareto.columns = ["Machine","MTTR_total_h"]
+# ── Per-machine aggregation with MEAN-based KPIs ──
+def _machine_kpis(group):
+    _failures = (group["mttr_h"] > 0).sum()
+    _total_dt = group["mttr_h"].sum()           # total downtime
+    _total_ut = group["mtbf_h"].sum()           # total uptime
+    _mean_mttr = _total_dt / _failures if _failures > 0 else 0.0
+    _mean_mtbf = _total_ut / _failures if (_failures > 0 and has_mtbf) else 0.0
+    if has_mtbf and (_mean_mtbf + _mean_mttr) > 0:
+        _avail = round(_mean_mtbf / (_mean_mtbf + _mean_mttr) * 100, 2)
+    else:
+        _prod_n = group[COL_STATUS].str.upper().str.contains("PRODUCTION", na=False).sum()
+        _avail  = round(_prod_n / len(group) * 100, 2) if len(group) > 0 else 100.0
+    return pd.Series({
+        "mean_mttr_h": round(_mean_mttr, 4),
+        "mean_mtbf_h": round(_mean_mtbf, 4),
+        "nb_failures": int(_failures),
+        "nb_events":   len(group),
+        "dispo":       _avail,
+    })
+
+ma = df.groupby(COL_MACHINE).apply(_machine_kpis).reset_index()
+
+# Pareto: total downtime per machine (for ranking worst actors)
+pareto = df[df["mttr_h"] > 0].groupby(COL_MACHINE)["mttr_h"].sum().reset_index()
+pareto.columns = ["Machine", "MTTR_total_h"]
 pareto = pareto.sort_values("MTTR_total_h", ascending=False).reset_index(drop=True)
-pareto["Pct"]   = (pareto["MTTR_total_h"]/pareto["MTTR_total_h"].sum()*100).round(1)
+pareto["Pct"]   = (pareto["MTTR_total_h"] / pareto["MTTR_total_h"].sum() * 100).round(1)
 pareto["Cumul"] = pareto["Pct"].cumsum().round(1)
 
 kpi = dict(
     dispo=dispo, mttr_mean_h=mttr_mean_h, mtbf_mean_h=mtbf_mean_h,
-    nb_arrets=nb_arrets, mttr_total_h=round(mt_total,2),
-    mtbf_total_h=round(mb_total,2), nb_rows=len(df),
+    nb_arrets=nb_arrets, mttr_total_h=round(mt_total, 2),
+    mtbf_total_h=round(mb_total, 2), nb_rows=len(df),
     by_machine=ma, pareto=pareto,
 )
 
@@ -1312,21 +1226,21 @@ else:
     prod_ct = nonprod_ct = 0
 
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  HEADER
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 dispo_col = TE_GREEN if dispo >= 95 else TE_AMBER if dispo >= 90 else TE_RED
-dispo_lbl = "On Target " if dispo >= 95 else "Watch " if dispo >= 90 else "Critical "
+dispo_lbl = "On Target ✓" if dispo >= 95 else "Watch ⚠" if dispo >= 90 else "Critical ✗"
 
 st.markdown(f"""
 <div class="te-header">
   <div style="display:flex;justify-content:space-between;align-items:flex-start">
     <div>
       <div class="te-header-tag">Stamping Department · Bruderer Presses</div>
-      <div class="te-header-title">Dashboard <span>KPI</span> Maintenance</div>
-      <div class="te-header-sub">MTTR · MTBF · Availability · Criticality · Pareto Analysis</div>
+      <div class="te-header-title">Stamping <span>CMMS</span></div>
+      <div class="te-header-sub">Mean MTTR · Mean MTBF · Availability · Criticality · Pareto Analysis</div>
       <div class="te-header-badge">
-         {df[COL_MACHINE].nunique()} machine{"s" if df[COL_MACHINE].nunique()>1 else ""}
+        ⚙ {df[COL_MACHINE].nunique()} machine{"s" if df[COL_MACHINE].nunique()>1 else ""}
         &nbsp;·&nbsp; {len(df):,} events
         &nbsp;·&nbsp; <span style="color:{dispo_col};font-weight:700">{dispo}% — {dispo_lbl}</span>
       </div>
@@ -1347,24 +1261,24 @@ if not has_mtbf:
     <div style="background:#fff8e1;border:1px solid #ffe082;border-left:4px solid {TE_AMBER};
                 border-radius:8px;padding:10px 18px;font-size:12px;color:#5d4037;
                 margin-bottom:12px;display:flex;align-items:center;gap:10px">
-       <span><strong>MTBF column absent or empty.</strong>
+        ⚠ <span><strong>MTBF column absent or empty.</strong>
       Availability computed from machine status (PRODUCTION rows / total).</span>
     </div>
     """, unsafe_allow_html=True)
 
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  TABS
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 tab_kpi, tab_qual = st.tabs([
-    "  Performance Analysis (KPIs)",
-    "  Stops Qualification",
+    "⚙  Performance Analysis (KPIs)",
+    "📋  Stops Qualification",
 ])
 
 
-# 
+# ══════════════════════════════════════════════════════════════════════════════
 #  TAB 1 — KPI ANALYSIS
-# 
+# ══════════════════════════════════════════════════════════════════════════════
 with tab_kpi:
 
     st.markdown(f"""
@@ -1372,7 +1286,7 @@ with tab_kpi:
       <div class="te-dot-green"></div>
       <div class="te-statusbar-item"><strong>{len(df):,}</strong>&nbsp;events</div>
       <div class="te-sep"></div>
-      <div class="te-statusbar-item">Stops: <strong>{nb_arrets}</strong></div>
+      <div class="te-statusbar-item">Failures: <strong>{nb_arrets}</strong></div>
       <div class="te-sep"></div>
       <div class="te-statusbar-item">Machines: <strong>{df[COL_MACHINE].nunique()}</strong></div>
       {"<div class='te-sep'></div><div class='te-statusbar-item'>Production: <strong>"+str(prod_ct)+"</strong></div>" if has_prod else ""}
@@ -1380,37 +1294,41 @@ with tab_kpi:
       <div class="te-statusbar-item">
         Availability: <strong style="color:{dispo_col}">{dispo}% — {dispo_lbl}</strong>
       </div>
+      <div class="te-sep"></div>
+      <div class="te-statusbar-item" style="font-size:10px;color:#9A7A60">
+        Formula: MTBF/(MTBF+MTTR)
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
-    #  KPI Cards 
+    # ── KPI Cards ──
     _total_cost = 0.0
     if st.session_state.edited_df is not None and "Total Part Cost" in st.session_state.edited_df.columns:
         _total_cost = float(
             pd.to_numeric(st.session_state.edited_df["Total Part Cost"], errors="coerce")
             .fillna(0).sum())
 
-    st.markdown('<div class="te-section">Main KPIs</div>', unsafe_allow_html=True)
+    st.markdown('<div class="te-section">⊞ Main KPIs</div>', unsafe_allow_html=True)
     c1, c2, c3, c4, c5 = st.columns(5)
 
     for col, label, value, unit, is_cost in [
         (c1, "AVAILABILITY",
          f"{dispo}%",
-         f"{'MTBF-based' if has_mtbf else 'Status-based'}",
+         f"MTBF/(MTBF+MTTR)" if has_mtbf else "Status-based",
          False),
-        (c2, "AVG MTTR / STOP",
+        (c2, "MEAN MTTR",
          f"{mttr_mean_h:.3f} h",
-         f"{round(mttr_mean_h*60,1)} min per stop",
+         f"{round(mttr_mean_h*60,1)} min · Total DT / Failures",
          False),
-        (c3, "AVG MTBF",
+        (c3, "MEAN MTBF",
          f"{mtbf_mean_h:.2f} h" if has_mtbf else "N/A",
-         "Time between failures" if has_mtbf else "Column absent",
+         "Total UT / Failures" if has_mtbf else "Column absent",
          False),
-        (c4, "TOTAL STOPS",
+        (c4, "TOTAL FAILURES",
          f"{nb_arrets}",
          f"Out of {len(df):,} events",
          False),
-        (c5, "TOTAL MAINT. COST",
+        (c5, "MAINT. COST",
          f"€ {_total_cost:,.2f}",
          "Spare parts (qualified stops)",
          True),
@@ -1428,70 +1346,76 @@ with tab_kpi:
             </div>""", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    #  Performance Trend 
-    st.markdown('<div class="te-section"> Performance Trend</div>',
-                unsafe_allow_html=True)
+    # ──────────────────────────────────────────────────────────────────────────
+    #  PERFORMANCE TREND — Mean-based aggregation per period
+    # ──────────────────────────────────────────────────────────────────────────
+    st.markdown('<div class="te-section">📈 Performance Trend</div>', unsafe_allow_html=True)
 
     if "date_only" in df.columns:
-        _MONTH_FR = {1:"Jan", 2:"Fév", 3:"Mar", 4:"Avr", 5:"Mai", 6:"Juin",
-                     7:"Juil", 8:"Aoû", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Déc"}
+        _MONTH_FR = {1:"Jan", 2:"Feb", 3:"Mar", 4:"Apr", 5:"May", 6:"Jun",
+                     7:"Jul", 8:"Aug", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dec"}
         _df_t = df.copy()
         _dt   = pd.to_datetime(_df_t["date_only"], errors="coerce")
 
-        _df_t["_month_num"]    = _dt.dt.month.astype("Int64")
         _df_t["_month_year_n"] = _dt.dt.year.astype("Int64") * 100 + _dt.dt.month.astype("Int64")
         _df_t["_month_lbl"]    = (_dt.dt.month.map(_MONTH_FR).fillna("—") +
                                    " " + _dt.dt.year.astype(str).str[-2:])
-        _df_t["_week_num"]     = _dt.dt.isocalendar().week.astype("Int64")
         _df_t["_week_year_n"]  = (_dt.dt.isocalendar().year.astype("Int64") * 100 +
                                    _dt.dt.isocalendar().week.astype("Int64"))
-        _df_t["_week_lbl"]     = "S" + _df_t["_week_num"].astype(str)
+        _df_t["_week_lbl"]     = "W" + _dt.dt.isocalendar().week.astype(str)
 
-        def _te_agg(lbl_col, sort_key):
-            agg = _df_t.groupby(lbl_col, as_index=False).agg(
+        def _te_agg_mean(lbl_col, sort_key):
+            """
+            Aggregate per period using MEAN-based MTTR/MTBF:
+              mean_mttr = total_downtime / nb_failures
+              mean_mtbf = total_uptime   / nb_failures
+              availability = mean_mtbf / (mean_mtbf + mean_mttr)
+            """
+            grp = _df_t.groupby(lbl_col, as_index=False).agg(
                 _sort_key=(sort_key, "first"),
-                mttr_sum=("mttr_h", "sum"),
-                mtbf_sum=("mtbf_h", "sum"),
-                nb_stops=("mttr_h", lambda x: (x > 0).sum()),
+                total_dt=("mttr_h", "sum"),
+                total_ut=("mtbf_h", "sum"),
+                nb_failures=("mttr_h", lambda x: (x > 0).sum()),
                 nb_events=("mttr_h", "count"),
             ).sort_values("_sort_key")
+
+            grp["mean_mttr_h"] = (grp["total_dt"] / grp["nb_failures"].replace(0, np.nan)).fillna(0).round(4)
+            grp["mean_mtbf_h"] = (grp["total_ut"] / grp["nb_failures"].replace(0, np.nan)).fillna(0).round(4) if has_mtbf else 0.0
+
             if has_mtbf:
-                agg["dispo"] = agg.apply(
-                    lambda r: round(r.mtbf_sum/(r.mtbf_sum+r.mttr_sum)*100, 2)
-                    if (r.mtbf_sum+r.mttr_sum) > 0 else 100.0, axis=1)
+                grp["dispo"] = grp.apply(
+                    lambda r: round(r.mean_mtbf_h / (r.mean_mtbf_h + r.mean_mttr_h) * 100, 2)
+                    if (r.mean_mtbf_h + r.mean_mttr_h) > 0 else 100.0, axis=1)
             else:
                 _prod = (_df_t[_df_t[COL_STATUS].str.upper()
                                .str.contains("PRODUCTION", na=False)]
                          .groupby(lbl_col).size().reset_index(name="n_prod"))
                 _tot  = _df_t.groupby(lbl_col).size().reset_index(name="n_tot")
                 _rat  = _prod.merge(_tot, on=lbl_col, how="right").fillna(0)
-                _rat["dispo"] = (_rat["n_prod"]/_rat["n_tot"]*100).round(2)
-                agg = agg.merge(_rat[[lbl_col,"dispo"]], on=lbl_col, how="left")
-                agg["dispo"] = agg["dispo"].fillna(0.0)
-            agg = agg.rename(columns={lbl_col:"label",
-                                       "mttr_sum":"mttr_h",
-                                       "mtbf_sum":"mtbf_h"})
-            agg["mttr_h"] = agg["mttr_h"].round(4)
-            agg["mtbf_h"] = agg["mtbf_h"].round(3)
-            return agg[["label","mttr_h","mtbf_h","dispo",
-                        "nb_stops","nb_events"]].reset_index(drop=True)
+                _rat["dispo"] = (_rat["n_prod"] / _rat["n_tot"] * 100).round(2)
+                grp = grp.merge(_rat[[lbl_col, "dispo"]], on=lbl_col, how="left")
+                grp["dispo"] = grp["dispo"].fillna(0.0)
 
-        _df_week  = _te_agg("_week_lbl",  "_week_year_n")
-        _df_month = _te_agg("_month_lbl", "_month_year_n")
+            return grp.rename(columns={lbl_col: "label"})[
+                ["label", "mean_mttr_h", "mean_mtbf_h", "dispo",
+                 "nb_failures", "nb_events"]
+            ].reset_index(drop=True)
+
+        _df_week  = _te_agg_mean("_week_lbl",  "_week_year_n")
+        _df_month = _te_agg_mean("_month_lbl", "_month_year_n")
 
         def _te_line(x_vals, y_vals, title, y_title, color,
                      target=None, y_fmt=None, height=450):
             fig = go.Figure()
             if target is not None:
                 fig.add_trace(go.Scatter(
-                    x=x_vals, y=[target]*len(x_vals),
-                    mode="lines", name=f"Cible {target}%",
+                    x=x_vals, y=[target]*len(x_vals), mode="lines",
+                    name=f"Target {target}%",
                     line=dict(color=TE_RED, dash="dot", width=1.8),
                     hoverinfo="skip"))
-            fill_color = (_hex_to_rgba(color, 0.08))
+            fill_color = _hex_to_rgba(color, 0.08)
             fig.add_trace(go.Scatter(
-                x=x_vals, y=y_vals,
-                mode="lines+markers", name=y_title,
+                x=x_vals, y=y_vals, mode="lines+markers", name=y_title,
                 line=dict(color=color, width=2.5),
                 marker=dict(size=9, color=color,
                             line=dict(color="white", width=2), symbol="circle"),
@@ -1507,8 +1431,7 @@ with tab_kpi:
                 y_axis["range"] = [max(0, float(_safe_min) - 5), 105]
             apply(fig, height=height, showlegend=False,
                   title=dict(text=title,
-                             font=dict(size=13, color=TE_BLACK,
-                                       family="Barlow Condensed"),
+                             font=dict(size=13, color=TE_BLACK, family="Barlow Condensed"),
                              x=0.01, y=0.97),
                   xaxis=dict(tickfont=dict(size=10, color="#9A7A60"),
                              gridcolor="#F0E8E0", zeroline=False,
@@ -1532,8 +1455,13 @@ with tab_kpi:
 
         def _te_recap_table(df_agg, periode_col):
             _tbl = df_agg.rename(columns={
-                "label":"label_raw","mttr_h":"MTTR (h)","mtbf_h":"MTBF (h)",
-                "dispo":"Availability (%)", "nb_stops":"Stops", "nb_events":"Events"})
+                "label": "label_raw",
+                "mean_mttr_h": "Mean MTTR (h)",
+                "mean_mtbf_h": "Mean MTBF (h)",
+                "dispo": "Availability (%)",
+                "nb_failures": "Failures",
+                "nb_events": "Events"
+            })
             _tbl.insert(0, periode_col, _tbl.pop("label_raw"))
             def _sd(val):
                 try:
@@ -1545,47 +1473,47 @@ with tab_kpi:
             st.dataframe(
                 _tbl.style
                     .applymap(_sd, subset=["Availability (%)"])
-                    .format({"Availability (%)":"{:.2f}%",
-                             "MTTR (h)":"{:.4f}","MTBF (h)":"{:.3f}"}),
+                    .format({"Availability (%)": "{:.2f}%",
+                             "Mean MTTR (h)": "{:.4f}",
+                             "Mean MTBF (h)": "{:.4f}"}),
                 use_container_width=True, hide_index=True,
                 height=min(420, len(_tbl) * 36 + 42))
 
         _chart_choice = st.radio(
-            " Select chart to display:",
-            options=["Availability (%)", "MTTR (h)", "MTBF (h)"],
+            "📊 Select chart to display:",
+            options=["Availability (%)", "Mean MTTR (h)", "Mean MTBF (h)"],
             index=0, horizontal=True, key="te_chart_pick")
 
-        def _te_render_charts(df_v, suffix, is_mtbf, chart_key="Availability (%)"):
+        def _te_render_charts(df_v, is_mtbf, chart_key="Availability (%)"):
             x = df_v["label"].tolist()
             _specs = {
                 "Availability (%)": (
                     df_v["dispo"].tolist(),
-                    "Availability (%)", "Avail. (%)", TE_GREEN, 95, ".1f"),
-                "MTBF (h)": (
-                    df_v["mtbf_h"].tolist() if is_mtbf else [0]*len(df_v),
-                    "MTBF (h) — Reliability", "MTBF (h)", TE_NAVY, None, None),
-                "MTTR (h)": (
-                    df_v["mttr_h"].tolist(),
-                    "MTTR (h) — Repairability", "MTTR (h)", TE_ORANGE, None, None),
+                    "Availability (%) — MTBF/(MTBF+MTTR)", "Avail. (%)", TE_GREEN, 95, ".1f"),
+                "Mean MTBF (h)": (
+                    df_v["mean_mtbf_h"].tolist() if is_mtbf else [0]*len(df_v),
+                    "Mean MTBF (h) — Total Uptime / Failures", "Mean MTBF (h)", TE_NAVY, None, None),
+                "Mean MTTR (h)": (
+                    df_v["mean_mttr_h"].tolist(),
+                    "Mean MTTR (h) — Total Downtime / Failures", "Mean MTTR (h)", TE_ORANGE, None, None),
             }
             _sel = chart_key if chart_key in _specs else "Availability (%)"
             _y, _ttl, _yt, _clr, _tgt, _fmt = _specs[_sel]
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             st.plotly_chart(
-                _te_line(x, _y, _ttl, _yt, _clr,
-                         target=_tgt, y_fmt=_fmt, height=460),
+                _te_line(x, _y, _ttl, _yt, _clr, target=_tgt, y_fmt=_fmt, height=460),
                 use_container_width=True, config=PCONF)
-            if _sel == "MTBF (h)" and not is_mtbf:
-                st.caption(" MTBF column absent from Hydra file.")
+            if _sel == "Mean MTBF (h)" and not is_mtbf:
+                st.caption("⚠ MTBF column absent from Hydra file.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        _stab_w, _stab_m = st.tabs(["  Weekly View", "  Monthly View"])
+        _stab_w, _stab_m = st.tabs(["📅  Weekly View", "📆  Monthly View"])
 
         with _stab_w:
             if len(_df_week) < 2:
                 st.info("Not enough weekly data (minimum 2 weeks required).")
             else:
-                _te_render_charts(_df_week, "w", has_mtbf, _chart_choice)
+                _te_render_charts(_df_week, has_mtbf, _chart_choice)
                 _te_mini_label("Weekly Summary")
                 _te_recap_table(_df_week, "Week")
 
@@ -1593,25 +1521,24 @@ with tab_kpi:
             if len(_df_month) < 2:
                 st.info("Not enough monthly data (minimum 2 months required).")
             else:
-                _te_render_charts(_df_month, "m", has_mtbf, _chart_choice)
+                _te_render_charts(_df_month, has_mtbf, _chart_choice)
                 _te_mini_label("Monthly Summary")
                 _te_recap_table(_df_month, "Month")
 
     else:
-        st.info(" Column `plant_shift_date` absent — time trend unavailable.")
+        st.info("⚠ Column `plant_shift_date` absent — time trend unavailable.")
 
-    #  Pareto + Pie 
-    st.markdown('<div class="te-section">Pareto & Cause Analysis</div>',
-                unsafe_allow_html=True)
+    # ── Pareto + Pie ──
+    st.markdown('<div class="te-section">📊 Pareto & Cause Analysis</div>', unsafe_allow_html=True)
     col_l, col_r = st.columns(2, gap="medium")
 
     with col_l:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title"> Downtime Pareto</div></div>""",
+          <div class="chart-title">🔻 Downtime Pareto</div></div>""",
           unsafe_allow_html=True)
         if not pareto.empty:
-            bc = [TE_ORANGE if i<2 else TE_NAVY if i<4 else "#A8A8A8"
+            bc = [TE_ORANGE if i < 2 else TE_NAVY if i < 4 else "#A8A8A8"
                   for i in range(len(pareto))]
             fig_par = make_subplots(specs=[[{"secondary_y": True}]])
             fig_par.add_trace(go.Bar(
@@ -1619,7 +1546,7 @@ with tab_kpi:
                 marker=dict(color=bc, line=dict(width=0)),
                 text=[f"{v:.2f}h" for v in pareto["MTTR_total_h"]],
                 textposition="outside", textfont=dict(size=10, color="#4A3020"),
-                hovertemplate="<b>%{x}</b><br>Downtime: %{y:.3f} h<extra></extra>"
+                hovertemplate="<b>%{x}</b><br>Total Downtime: %{y:.3f} h<extra></extra>"
             ), secondary_y=False)
             fig_par.add_trace(go.Scatter(
                 x=pareto["Machine"], y=pareto["Cumul"], name="Cumul (%)",
@@ -1632,7 +1559,7 @@ with tab_kpi:
                               secondary_y=True, annotation_text="80%",
                               annotation_font=dict(color=TE_RED, size=10))
             fig_par.update_layout(**{**PL, "height": 320, "bargap": 0.3,
-                "yaxis":  dict(title="Downtime (h)", gridcolor="#F0E8E0",
+                "yaxis":  dict(title="Total Downtime (h)", gridcolor="#F0E8E0",
                                tickfont=dict(size=9, color="#9A7A60"), zeroline=False),
                 "yaxis2": dict(title="Cumul (%)", range=[0, 115], ticksuffix="%",
                                gridcolor="#F0E8E0", tickfont=dict(size=9, color="#9A7A60"),
@@ -1643,9 +1570,9 @@ with tab_kpi:
             top1 = pareto.iloc[0]
             top2_pct = pareto.head(2)["Pct"].sum()
             st.markdown(
-                f'<div class="te-insight-crit"> <strong>{top1["Machine"]}</strong> '
-                f'= <strong>{top1["Pct"]}%</strong> of downtime. '
-                f'Top 2 = <strong>{top2_pct:.1f}%</strong>.</div>',
+                f'<div class="te-insight-crit">⚠ <strong>{top1["Machine"]}</strong> '
+                f'= <strong>{top1["Pct"]}%</strong> of total downtime. '
+                f'Top 2 machines = <strong>{top2_pct:.1f}%</strong>.</div>',
                 unsafe_allow_html=True)
         else:
             st.info("No stops detected.")
@@ -1654,7 +1581,7 @@ with tab_kpi:
     with col_r:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title"> Cause Analysis</div></div>""",
+          <div class="chart-title">🔵 Cause Analysis</div></div>""",
           unsafe_allow_html=True)
         sc = df[COL_STATUS].value_counts().reset_index()
         sc.columns = ["Statut", "Nombre"]
@@ -1669,7 +1596,8 @@ with tab_kpi:
         ))
         apply(fig_pie, height=320,
             annotations=[dict(text=f"<b>{len(df):,}</b><br>events", x=0.5, y=0.5,
-                showarrow=False, font=dict(size=14, color=TE_BLACK, family="Barlow Condensed"))],
+                showarrow=False, font=dict(size=14, color=TE_BLACK,
+                                           family="Barlow Condensed"))],
             legend=dict(orientation="v", x=1, y=0.5, font=dict(size=10)))
         st.plotly_chart(fig_pie, use_container_width=True, config=PCONF)
         micro_row = sc[sc["Statut"].str.lower().str.contains("micro", na=False)]
@@ -1679,24 +1607,24 @@ with tab_kpi:
             rc = int(rep_row["Nombre"].sum())
             dominant = "Micro-Stops" if mc > rc else "Repairs"
             st.markdown(
-                f'<div class="te-insight"> <strong>{dominant}</strong> dominate '
+                f'<div class="te-insight">📌 <strong>{dominant}</strong> dominate '
                 f'({max(mc,rc)} occurrences). '
-                f'{"Focus on 5S and standardization." if mc>rc else "Strengthen preventive maintenance."}'
+                f'{"Focus on 5S and standardization." if mc > rc else "Strengthen preventive maintenance."}'
                 f'</div>', unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    #  Criticality Matrix + Daily Trend 
-    st.markdown('<div class="te-section">Criticality & Time Trend</div>',
-                unsafe_allow_html=True)
+    # ── Criticality Matrix + Daily Trend ──
+    st.markdown('<div class="te-section">🎯 Criticality & Time Trend</div>', unsafe_allow_html=True)
     col_a, col_b = st.columns([2, 3], gap="medium")
 
     with col_a:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title"> Criticality Matrix</div></div>""",
+          <div class="chart-title">🎯 Criticality Matrix</div></div>""",
           unsafe_allow_html=True)
-        mx_v = ma["tm"].max() * 1.55 or 10
-        my_v = ma["tb"].max() * 1.55 or 100
+        # Use mean MTTR / mean MTBF for criticality axes
+        mx_v = ma["mean_mttr_h"].max() * 1.55 or 10
+        my_v = ma["mean_mtbf_h"].max() * 1.55 or 100
         midx, midy = mx_v / 2, my_v / 2
         fig_mat = go.Figure()
         for x0, y0, x1, y1, c in [
@@ -1708,10 +1636,10 @@ with tab_kpi:
             fig_mat.add_shape(type="rect", x0=x0, y0=y0, x1=x1, y1=y1,
                               fillcolor=c, line_width=0, layer="below")
         for txt, x, y, tc in [
-            (" RELIABLE",  midx*0.04, my_v*0.97, TE_GREEN),
-            (" WATCH",    mx_v*0.54, my_v*0.97, TE_NAVY),
-            (" IMPROVE",  midx*0.04, my_v*0.47, TE_AMBER),
-            (" CRITICAL", mx_v*0.54, my_v*0.47, TE_RED),
+            ("↖ RELIABLE",  midx*0.04, my_v*0.97, TE_GREEN),
+            ("↗ WATCH",     mx_v*0.54, my_v*0.97, TE_NAVY),
+            ("↙ IMPROVE",   midx*0.04, my_v*0.47, TE_AMBER),
+            ("↘ CRITICAL",  mx_v*0.54, my_v*0.47, TE_RED),
         ]:
             fig_mat.add_annotation(x=x, y=y, text=txt, showarrow=False,
                 font=dict(size=9, color=tc, family="Barlow Condensed"),
@@ -1721,21 +1649,21 @@ with tab_kpi:
         for i, row in ma.iterrows():
             c_dot = PALETTE[i % len(PALETTE)]
             fig_mat.add_trace(go.Scatter(
-                x=[row["tm"]], y=[row["tb"]],
+                x=[row["mean_mttr_h"]], y=[row["mean_mtbf_h"]],
                 mode="markers+text", name=row[COL_MACHINE],
                 text=[row[COL_MACHINE]], textposition="top center",
                 textfont=dict(size=11, color=c_dot, family="Barlow Condensed"),
-                marker=dict(size=min(60, max(22, int(row["nb_evt"]) * 3)),
+                marker=dict(size=min(60, max(22, int(row["nb_failures"]) * 3)),
                             color=c_dot, opacity=0.88,
                             line=dict(color="white", width=3)),
                 hovertemplate=(f"<b>{row[COL_MACHINE]}</b><br>"
-                               "MTTR: %{x:.2f} h<br>MTBF: %{y:.2f} h<br>"
+                               "Mean MTTR: %{x:.3f} h<br>Mean MTBF: %{y:.3f} h<br>"
                                f"Avail.: {row['dispo']}%<extra></extra>")
             ))
         apply(fig_mat, height=360, showlegend=False,
-            xaxis=dict(title="Total MTTR (h)", range=[0, mx_v], gridcolor="#F0E8E0",
+            xaxis=dict(title="Mean MTTR (h)", range=[0, mx_v], gridcolor="#F0E8E0",
                        tickfont=dict(size=9, color="#9A7A60"), zeroline=False),
-            yaxis=dict(title="Total MTBF (h)", range=[0, my_v], gridcolor="#F0E8E0",
+            yaxis=dict(title="Mean MTBF (h)", range=[0, my_v], gridcolor="#F0E8E0",
                        tickfont=dict(size=9, color="#9A7A60"), zeroline=False))
         st.plotly_chart(fig_mat, use_container_width=True, config=PCONF)
         st.markdown("""
@@ -1743,30 +1671,38 @@ with tab_kpi:
           <div class="quad q-good"><h5>↖ Reliable + Fast</h5><p>Maintain standard PM</p></div>
           <div class="quad q-watch"><h5>↗ Monitor</h5><p>Improve repair procedure</p></div>
           <div class="quad q-warn"><h5>↙ Improve</h5><p>Reinforced preventive PM</p></div>
-          <div class="quad q-crit"><h5>↘ Bad Actor </h5><p>Absolute TPM priority</p></div>
+          <div class="quad q-crit"><h5>↘ Bad Actor ⚠</h5><p>Absolute TPM priority</p></div>
         </div>""", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_b:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title"> Daily Availability Trend</div></div>""",
+          <div class="chart-title">📈 Daily Availability Trend</div></div>""",
           unsafe_allow_html=True)
         if "date_only" in df.columns:
-            dm = df.groupby(["date_only", COL_MACHINE]).agg(
-                mt=("mttr_h","sum"), mb=("mtbf_h","sum")).reset_index()
-            dm["dp"] = dm.apply(
-                lambda r: round(r.mb/(r.mb+r.mt)*100,1) if (r.mb+r.mt)>0 else 100.0, axis=1)
-            da = df.groupby("date_only").agg(
-                mt=("mttr_h","sum"), mb=("mtbf_h","sum")).reset_index()
-            da["dp"] = da.apply(
-                lambda r: round(r.mb/(r.mb+r.mt)*100,1) if (r.mb+r.mt)>0 else 100.0, axis=1)
+            # Daily availability using mean-based formula
+            def _daily_avail(grp):
+                _f = (grp["mttr_h"] > 0).sum()
+                _dt = grp["mttr_h"].sum()
+                _ut = grp["mtbf_h"].sum()
+                _m_mttr = _dt / _f if _f > 0 else 0.0
+                _m_mtbf = _ut / _f if (_f > 0 and has_mtbf) else 0.0
+                if (_m_mtbf + _m_mttr) > 0:
+                    return round(_m_mtbf / (_m_mtbf + _m_mttr) * 100, 1)
+                return 100.0
+
+            dm = df.groupby(["date_only", COL_MACHINE]).apply(_daily_avail).reset_index()
+            dm.columns = ["date_only", COL_MACHINE, "dp"]
+            da = df.groupby("date_only").apply(_daily_avail).reset_index()
+            da.columns = ["date_only", "dp"]
+
             fig_evo = go.Figure()
             fig_evo.add_trace(go.Scatter(
                 x=da["date_only"], y=[95]*len(da), mode="lines", name="Target 95%",
                 line=dict(color=TE_RED, dash="dot", width=1.5)))
             for i, mac in enumerate(sorted(dm[COL_MACHINE].unique())):
-                d2 = dm[dm[COL_MACHINE]==mac].sort_values("date_only")
+                d2 = dm[dm[COL_MACHINE] == mac].sort_values("date_only")
                 c2 = PALETTE[i % len(PALETTE)]
                 fig_evo.add_trace(go.Scatter(
                     x=d2["date_only"], y=d2["dp"], mode="lines+markers", name=mac,
@@ -1775,11 +1711,11 @@ with tab_kpi:
                     hovertemplate=f"<b>{mac}</b><br>%{{x|%m/%d/%Y}}<br>Avail.: <b>%{{y}}%</b><extra></extra>"
                 ))
             fig_evo.add_trace(go.Scatter(
-                x=da["date_only"], y=da["dp"], mode="lines", name=" Global",
+                x=da["date_only"], y=da["dp"], mode="lines", name="⊞ Global",
                 line=dict(color=TE_NAVY, width=3, dash="dot"),
                 hovertemplate="Global<br>%{x|%m/%d/%Y}<br>Avail.: <b>%{y}%</b><extra></extra>"))
             apply(fig_evo, height=360,
-                yaxis=dict(ticksuffix="%", range=[60,105], gridcolor="#F0E8E0",
+                yaxis=dict(ticksuffix="%", range=[60, 105], gridcolor="#F0E8E0",
                            tickfont=dict(size=9, color="#9A7A60"), zeroline=False),
                 xaxis=dict(tickformat="%d/%m", gridcolor="#F0E8E0",
                            tickfont=dict(size=9, color="#9A7A60"), zeroline=False))
@@ -1788,64 +1724,63 @@ with tab_kpi:
             st.info("Column `plant_shift_date` absent — trend unavailable.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    #  MTBF + MTTR by Machine 
-    st.markdown('<div class="te-section">MTTR & MTBF Detail by Machine</div>',
-                unsafe_allow_html=True)
+    # ── Mean MTBF + Mean MTTR by Machine ──
+    st.markdown('<div class="te-section">⏱ Mean MTTR & Mean MTBF by Machine</div>', unsafe_allow_html=True)
     col_c, col_d = st.columns(2, gap="medium")
 
     with col_c:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">Avg MTBF per Machine (h)</div></div>""",
+          <div class="chart-title">Mean MTBF per Machine (h)</div></div>""",
           unsafe_allow_html=True)
-        mb_m = df.groupby(COL_MACHINE)["mtbf_h"].mean().reset_index()
-        mb_m.columns = ["Machine","MTBF"]
-        mb_m = mb_m.sort_values("MTBF", ascending=True)
+        mb_m = ma[[COL_MACHINE, "mean_mtbf_h"]].sort_values("mean_mtbf_h", ascending=True)
         fig_mb = go.Figure(go.Bar(
-            x=mb_m["MTBF"], y=mb_m["Machine"], orientation="h",
-            marker=dict(color=mb_m["MTBF"],
+            x=mb_m["mean_mtbf_h"], y=mb_m[COL_MACHINE], orientation="h",
+            marker=dict(color=mb_m["mean_mtbf_h"],
                         colorscale=[[0,"#FAD9B5"],[0.5,TE_ORANGE2],[1,TE_DARK]],
                         showscale=False, line=dict(width=0)),
-            text=mb_m["MTBF"].apply(lambda v: f"{v:.3f}h"),
+            text=mb_m["mean_mtbf_h"].apply(lambda v: f"{v:.3f}h"),
             textposition="outside", textfont=dict(size=10, color="#6A4030"),
-            hovertemplate="<b>%{y}</b><br>MTBF: %{x:.4f} h<extra></extra>"
+            hovertemplate="<b>%{y}</b><br>Mean MTBF: %{x:.4f} h<extra></extra>"
         ))
         apply(fig_mb, height=max(240, len(mb_m)*55), bargap=0.35, showlegend=False,
-            xaxis=dict(gridcolor="#F0E8E0", tickfont=dict(size=9,color="#9A7A60"), zeroline=False),
-            yaxis=dict(showgrid=False, tickfont=dict(size=11,color="#4A3020")))
+            xaxis=dict(gridcolor="#F0E8E0", tickfont=dict(size=9, color="#9A7A60"),
+                       zeroline=False, title="Mean MTBF (h)"),
+            yaxis=dict(showgrid=False, tickfont=dict(size=11, color="#4A3020")))
         st.plotly_chart(fig_mb, use_container_width=True, config=PCONF)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_d:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">Avg MTTR per Machine (h)</div></div>""",
+          <div class="chart-title">Mean MTTR per Machine (h)</div></div>""",
           unsafe_allow_html=True)
-        mt_m = df[df["mttr_h"]>0].groupby(COL_MACHINE)["mttr_h"].mean().reset_index()
-        mt_m.columns = ["Machine","MTTR"]
-        mt_m = mt_m.sort_values("MTTR", ascending=False)
+        mt_m = ma[[COL_MACHINE, "mean_mttr_h"]].sort_values("mean_mttr_h", ascending=False)
         fig_mt = go.Figure(go.Bar(
-            x=mt_m["Machine"], y=mt_m["MTTR"],
-            marker=dict(color=mt_m["MTTR"],
+            x=mt_m[COL_MACHINE], y=mt_m["mean_mttr_h"],
+            marker=dict(color=mt_m["mean_mttr_h"],
                         colorscale=[[0,"#FAD9B5"],[0.5,TE_ORANGE],[1,TE_RED]],
                         showscale=False, line=dict(width=0)),
-            hovertemplate="<b>%{x}</b><br>MTTR: %{y:.4f} h<extra></extra>"
+            hovertemplate="<b>%{x}</b><br>Mean MTTR: %{y:.4f} h<extra></extra>"
         ))
         apply(fig_mt, height=max(240, len(mt_m)*55), bargap=0.35, showlegend=False,
-            xaxis=dict(showgrid=False, tickfont=dict(size=11,color="#4A3020")),
-            yaxis=dict(gridcolor="#F0E8E0", tickfont=dict(size=9,color="#9A7A60"), zeroline=False))
+            xaxis=dict(showgrid=False, tickfont=dict(size=11, color="#4A3020")),
+            yaxis=dict(gridcolor="#F0E8E0", tickfont=dict(size=9, color="#9A7A60"),
+                       zeroline=False, title="Mean MTTR (h)"))
         st.plotly_chart(fig_mt, use_container_width=True, config=PCONF)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    #  Summary Table 
-    st.markdown('<div class="te-section">Summary Table by Machine</div>',
-                unsafe_allow_html=True)
+    # ── Summary Table ──
+    st.markdown('<div class="te-section">📋 Summary Table by Machine</div>', unsafe_allow_html=True)
 
-    ma_disp = ma.copy()
-    ma_disp.columns = ["Machine","Total MTTR (h)","Total MTBF (h)","Events","Availability (%)"]
-    ma_disp["Total MTTR (h)"]   = ma_disp["Total MTTR (h)"].round(4)
-    ma_disp["Total MTBF (h)"]   = ma_disp["Total MTBF (h)"].round(2)
-    ma_disp["Availability (%)"] = ma_disp["Availability (%)"].astype(float)
+    ma_disp = ma.rename(columns={
+        COL_MACHINE:      "Machine",
+        "mean_mttr_h":    "Mean MTTR (h)",
+        "mean_mtbf_h":    "Mean MTBF (h)",
+        "nb_failures":    "Failures",
+        "nb_events":      "Events",
+        "dispo":          "Availability (%)",
+    })[["Machine","Mean MTTR (h)","Mean MTBF (h)","Failures","Events","Availability (%)"]].copy()
 
     worst = ma_disp.loc[ma_disp["Availability (%)"].idxmin()]
     best  = ma_disp.loc[ma_disp["Availability (%)"].idxmax()]
@@ -1853,20 +1788,21 @@ with tab_kpi:
     with ci1:
         if worst["Availability (%)"] < 90:
             st.markdown(
-                f'<div class="te-insight-crit"> <strong>Bad Actor: {worst["Machine"]}</strong>'
+                f'<div class="te-insight-crit">⚠ <strong>Bad Actor: {worst["Machine"]}</strong>'
                 f' — Avail. {worst["Availability (%)"]:.1f}% '
-                f'(MTTR = {worst["Total MTTR (h)"]:.3f} h). Priority TPM action.</div>',
+                f'(Mean MTTR = {worst["Mean MTTR (h)"]:.3f} h). Priority TPM action.</div>',
                 unsafe_allow_html=True)
         else:
             st.markdown(
-                f'<div class="te-insight-ok"> All machines ≥ 90%. '
+                f'<div class="te-insight-ok">✅ All machines ≥ 90%. '
                 f'Best: <strong>{best["Machine"]}</strong> ({best["Availability (%)"]:.1f}%).</div>',
                 unsafe_allow_html=True)
     with ci2:
         st.markdown(
-            f'<div class="te-insight"> <strong>Global avg MTTR:</strong> '
+            f'<div class="te-insight">📌 <strong>Mean MTTR (global):</strong> '
             f'{mttr_mean_h:.3f} h ({round(mttr_mean_h*60,1)} min) · '
-            f'<strong>Total Stops:</strong> {nb_arrets} / {len(df):,} events.</div>',
+            f'<strong>Total Failures:</strong> {nb_arrets} / {len(df):,} events · '
+            f'Formula: Mean MTTR = Total Downtime / Failures</div>',
             unsafe_allow_html=True)
 
     def style_dispo(val):
@@ -1880,7 +1816,7 @@ with tab_kpi:
     def style_mttr(val):
         try:
             v  = float(val)
-            mx2 = float(ma_disp["Total MTTR (h)"].max()) or 1.0
+            mx2 = float(ma_disp["Mean MTTR (h)"].max()) or 1.0
             ratio = min(v / mx2, 1.0)
             g   = int(255 - ratio * 160)
             b2  = int(255 - ratio * 210)
@@ -1891,17 +1827,17 @@ with tab_kpi:
     st.dataframe(
         ma_disp.style
             .applymap(style_dispo, subset=["Availability (%)"])
-            .applymap(style_mttr,  subset=["Total MTTR (h)"])
-            .format({"Total MTTR (h)":"{:.4f}","Total MTBF (h)":"{:.2f}",
+            .applymap(style_mttr,  subset=["Mean MTTR (h)"])
+            .format({"Mean MTTR (h)":"{:.4f}","Mean MTBF (h)":"{:.4f}",
                      "Availability (%)":"{:.1f}%"}),
         use_container_width=True, hide_index=True
     )
 
-    #  Export 
-    st.markdown('<div class="te-section">Data Export</div>', unsafe_allow_html=True)
+    # ── Export ──
+    st.markdown('<div class="te-section">⬇ Data Export</div>', unsafe_allow_html=True)
     today_str = datetime.now().strftime("%Y%m%d_%H%M")
 
-    #  PDF Builder 
+    # ── PDF Builder ──
     def build_pdf(df_in: pd.DataFrame, kpi_d: dict,
                   ma_table: pd.DataFrame, pareto_df: pd.DataFrame) -> bytes:
         from reportlab.lib.pagesizes import A4
@@ -1998,14 +1934,14 @@ with tab_kpi:
                     story.append(Paragraph(caption, S_CAP))
             else:
                 story.append(Paragraph(
-                    f" Chart unavailable ({caption}) — pip install kaleido", S_CAP))
+                    f"[Chart unavailable ({caption}) — pip install kaleido]", S_CAP))
             story.append(Spacer(1, 0.2*cm))
 
         def _pdf_te_agg(df_src):
             if "date_only" not in df_src.columns:
                 return pd.DataFrame(), pd.DataFrame()
-            _MFR = {1:"Jan",2:"Fév",3:"Mar",4:"Avr",5:"Mai",6:"Juin",
-                    7:"Juil",8:"Aoû",9:"Sep",10:"Oct",11:"Nov",12:"Déc"}
+            _MFR = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
+                    7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
             _t  = df_src.copy()
             _dt = pd.to_datetime(_t["date_only"], errors="coerce")
             _t["_month_year_n"] = (_dt.dt.year.astype("Int64")*100 +
@@ -2014,20 +1950,22 @@ with tab_kpi:
                                     _dt.dt.year.astype(str).str[-2:])
             _t["_week_year_n"]  = (_dt.dt.isocalendar().year.astype("Int64")*100 +
                                     _dt.dt.isocalendar().week.astype("Int64"))
-            _t["_week_lbl"]     = "S" + _dt.dt.isocalendar().week.astype(str)
+            _t["_week_lbl"]     = "W" + _dt.dt.isocalendar().week.astype(str)
 
             def _agg(lbl_col, sort_key):
-                agg = _t.groupby(lbl_col, as_index=False).agg(
+                grp = _t.groupby(lbl_col, as_index=False).agg(
                     _sk=(sort_key, "first"),
-                    mttr_h=("mttr_h", "sum"),
-                    mtbf_h=("mtbf_h", "sum"),
-                    nb_stops=("mttr_h", lambda x: (x > 0).sum()),
+                    total_dt=("mttr_h", "sum"),
+                    total_ut=("mtbf_h", "sum"),
+                    nb_failures=("mttr_h", lambda x: (x > 0).sum()),
                     nb_events=("mttr_h", "count"),
                 ).sort_values("_sk")
+                grp["mean_mttr_h"] = (grp["total_dt"] / grp["nb_failures"].replace(0, np.nan)).fillna(0).round(4)
+                grp["mean_mtbf_h"] = (grp["total_ut"] / grp["nb_failures"].replace(0, np.nan)).fillna(0).round(4) if has_mtbf else 0.0
                 if has_mtbf:
-                    agg["dispo"] = agg.apply(
-                        lambda r: round(r.mtbf_h/(r.mtbf_h+r.mttr_h)*100, 2)
-                        if (r.mtbf_h+r.mttr_h) > 0 else 100.0, axis=1)
+                    grp["dispo"] = grp.apply(
+                        lambda r: round(r.mean_mtbf_h/(r.mean_mtbf_h+r.mean_mttr_h)*100, 2)
+                        if (r.mean_mtbf_h+r.mean_mttr_h) > 0 else 100.0, axis=1)
                 else:
                     _prod = (_t[_t[COL_STATUS].str.upper()
                                 .str.contains("PRODUCTION", na=False)]
@@ -2035,13 +1973,11 @@ with tab_kpi:
                     _tot  = _t.groupby(lbl_col).size().reset_index(name="n_tot")
                     _rat  = _prod.merge(_tot, on=lbl_col, how="right").fillna(0)
                     _rat["dispo"] = (_rat["n_prod"]/_rat["n_tot"]*100).round(2)
-                    agg = agg.merge(_rat[[lbl_col,"dispo"]], on=lbl_col, how="left")
-                    agg["dispo"] = agg["dispo"].fillna(0.0)
-                agg = agg.rename(columns={lbl_col:"label"})
-                agg["mttr_h"] = agg["mttr_h"].round(4)
-                agg["mtbf_h"] = agg["mtbf_h"].round(3)
-                return agg[["label","mttr_h","mtbf_h","dispo",
-                             "nb_stops","nb_events"]].reset_index(drop=True)
+                    grp = grp.merge(_rat[[lbl_col,"dispo"]], on=lbl_col, how="left")
+                    grp["dispo"] = grp["dispo"].fillna(0.0)
+                return grp.rename(columns={lbl_col:"label"})[
+                    ["label","mean_mttr_h","mean_mtbf_h","dispo","nb_failures","nb_events"]
+                ].reset_index(drop=True)
             return _agg("_week_lbl","_week_year_n"), _agg("_month_lbl","_month_year_n")
 
         def _make_trend_fig(df_v, col, title, color_hex, target=None, h_px=280):
@@ -2051,8 +1987,7 @@ with tab_kpi:
             if target is not None and x:
                 fig.add_trace(go.Scatter(
                     x=x, y=[target]*len(x), mode="lines",
-                    line=dict(color="#C0392B", dash="dot", width=2),
-                    hoverinfo="skip"))
+                    line=dict(color="#C0392B", dash="dot", width=2), hoverinfo="skip"))
             _rgba_fill = _hex_to_rgba(color_hex, 0.08)
             fig.add_trace(go.Scatter(
                 x=x, y=y, mode="lines+markers",
@@ -2073,17 +2008,18 @@ with tab_kpi:
             return fig
 
         def _recap_pdf_table(df_v, periode_lbl):
-            hdr = [[periode_lbl, "MTTR (h)", "MTBF (h)", "Availability (%)", "Stops", "Events"]]
+            hdr = [[periode_lbl, "Mean MTTR (h)", "Mean MTBF (h)",
+                    "Availability (%)", "Failures", "Events"]]
             rows = []
             extras = []
             for ri, row in df_v.iterrows():
                 d = float(row["dispo"])
                 rows.append([
                     str(row["label"]),
-                    f"{float(row['mttr_h']):.4f}",
-                    f"{float(row['mtbf_h']):.3f}",
+                    f"{float(row['mean_mttr_h']):.4f}",
+                    f"{float(row['mean_mtbf_h']):.4f}",
                     f"{d:.2f}%",
-                    str(int(row["nb_stops"])),
+                    str(int(row["nb_failures"])),
                     str(int(row["nb_events"])),
                 ])
                 ri_tbl = len(rows)
@@ -2101,7 +2037,7 @@ with tab_kpi:
             cws = [IW*x for x in [0.14, 0.17, 0.17, 0.22, 0.13, 0.13]]
             return _tbl(hdr + rows, cws, fs=8, extras=extras)
 
-        #  Cover page 
+        # Cover page
         def _cover_row(content, bg, pad_top=8, pad_bot=8, left=10):
             t = Table([[content]], colWidths=[IW])
             t.setStyle(TableStyle([
@@ -2114,18 +2050,17 @@ with tab_kpi:
             return t
 
         story.append(_cover_row(
-            Paragraph("≡ &nbsp; TE CONNECTIVITY", S_BRAND),
+            Paragraph("≡  TE CONNECTIVITY", S_BRAND),
             C_NAVY, pad_top=22, pad_bot=4))
         story.append(_cover_row(
-            Paragraph(" &nbsp; STAMPING DEPT &nbsp;·&nbsp; "
-                      "BRUDERER PRESSES &nbsp;·&nbsp; TANGIER PLANT 1310",
+            Paragraph("STAMPING DEPT  ·  BRUDERER PRESSES  ·  TANGIER PLANT 1310",
                       ps("bar", fontSize=8, textColor=C_WH,
                          fontName="Helvetica-Bold", letterSpacing=2)),
             C_OR, pad_top=6, pad_bot=6))
 
         _title_tbl = Table([[
-            Paragraph("TPM KPI DASHBOARD", S_TITLE),
-            Paragraph("Stamping Department<br/>Bruderer Presses S-001 → S-006", S_SUB),
+            Paragraph("STAMPING CMMS", S_TITLE),
+            Paragraph("Bruderer Presses S-001 → S-006<br/>Mean MTTR · Mean MTBF · Availability", S_SUB),
         ]], colWidths=[IW*0.60, IW*0.40])
         _title_tbl.setStyle(TableStyle([
             ("BACKGROUND",    (0,0),(-1,-1), C_NAVY),
@@ -2136,35 +2071,35 @@ with tab_kpi:
         ]))
         story.append(_title_tbl)
         story.append(_cover_row(
-            Paragraph(f"REPORT GENERATED: &nbsp;{datetime.now().strftime('%d/%m/%Y  à  %H:%M')}",
+            Paragraph(f"REPORT GENERATED:  {datetime.now().strftime('%d/%m/%Y   %H:%M')}",
                       S_DATE),
             C_NAVY, pad_top=2, pad_bot=18))
         story.append(Spacer(1, 0.5*cm))
 
         _kpi_data = [
-            ["INDICATEUR", "VALEUR"],
-            ["Global Availability", f"{kpi_d['dispo']:.2f} %"],
-            ["Avg MTTR / Stop", f"{kpi_d['mttr_mean_h']:.4f} h  ({round(kpi_d['mttr_mean_h']*60,1)} min)"],
-            ["Avg MTBF", f"{kpi_d['mtbf_mean_h']:.2f} h"],
-            ["Total Stops", str(kpi_d['nb_arrets'])],
-            ["Cumulative MTTR", f"{kpi_d['mttr_total_h']:.2f} h"],
-            ["Cumulative MTBF", f"{kpi_d['mtbf_total_h']:.2f} h"],
-            ["Total Events Analyzed", f"{kpi_d['nb_rows']:,}"],
+            ["INDICATOR", "VALUE"],
+            ["Global Availability (MTBF/(MTBF+MTTR))", f"{kpi_d['dispo']:.2f} %"],
+            ["Mean MTTR (Total DT / Failures)",         f"{kpi_d['mttr_mean_h']:.4f} h  ({round(kpi_d['mttr_mean_h']*60,1)} min)"],
+            ["Mean MTBF (Total UT / Failures)",         f"{kpi_d['mtbf_mean_h']:.4f} h"],
+            ["Total Failures",                          str(kpi_d['nb_arrets'])],
+            ["Total Downtime",                          f"{kpi_d['mttr_total_h']:.2f} h"],
+            ["Total Uptime",                            f"{kpi_d['mtbf_total_h']:.2f} h"],
+            ["Total Events Analyzed",                   f"{kpi_d['nb_rows']:,}"],
         ]
         _cover_extras = []
         for _ri in range(1, len(_kpi_data)):
             _bg = HexColor("#FAD0A8") if _ri % 2 == 1 else C_CREAM
             _cover_extras.append(("BACKGROUND", (0,_ri),(0,_ri), _bg))
-        story.append(_tbl(_kpi_data, [IW*0.55, IW*0.45], fs=9, extras=_cover_extras))
+        story.append(_tbl(_kpi_data, [IW*0.62, IW*0.38], fs=9, extras=_cover_extras))
         story.append(PageBreak())
 
-        #  Page 2: KPIs + Pareto + Pie 
-        section(" KPIs PRINCIPAUX")
+        # Page 2: KPIs + Pareto + Pie
+        section("⊞ MAIN KPIs")
         _kw = IW / 4
         _kpi_card = Table([
-            ["Availability", "Stops", "MTTR Moy.", "MTBF Moy."],
+            ["Availability", "Failures", "Mean MTTR", "Mean MTBF"],
             [f"{kpi_d['dispo']:.2f} %", str(kpi_d['nb_arrets']),
-             f"{kpi_d['mttr_mean_h']:.4f} h", f"{kpi_d['mtbf_mean_h']:.2f} h"],
+             f"{kpi_d['mttr_mean_h']:.4f} h", f"{kpi_d['mtbf_mean_h']:.4f} h"],
         ], colWidths=[_kw]*4)
         _kpi_card.setStyle(TableStyle([
             ("FONTNAME",     (0,0),(-1,0),  "Helvetica-Bold"),
@@ -2187,7 +2122,7 @@ with tab_kpi:
         story.append(_kpi_card)
         story.append(Spacer(1, 0.4*cm))
 
-        section(" DOWNTIME PARETO")
+        section("🔻 DOWNTIME PARETO")
         if not pareto_df.empty:
             _bc = [TE_ORANGE if i<2 else TE_NAVY if i<4 else "#A8A8A8"
                    for i in range(len(pareto_df))]
@@ -2202,133 +2137,25 @@ with tab_kpi:
                 x=pareto_df["Machine"], y=pareto_df["Cumul"],
                 mode="lines+markers",
                 line=dict(color="#C0392B", width=2.5),
-                marker=dict(size=8, color="#C0392B"),
-                hoverinfo="skip"),
+                marker=dict(size=8, color="#C0392B"), hoverinfo="skip"),
                 secondary_y=True)
-            _fp.add_hline(y=80, line_dash="dot", line_color="#C0392B", line_width=1.5,
-                           secondary_y=True)
+            _fp.add_hline(y=80, line_dash="dot", line_color="#C0392B",
+                           line_width=1.5, secondary_y=True)
             _fp.update_layout(
                 height=290, width=720, showlegend=False,
                 paper_bgcolor="white", plot_bgcolor="#FAFAFA",
                 margin=dict(l=44, r=44, t=16, b=44),
                 xaxis=dict(tickfont=dict(size=10), gridcolor="#F0E8E0"),
-                yaxis=dict(title="Downtime (h)", gridcolor="#F0E8E0", tickfont=dict(size=9)),
-                yaxis2=dict(title="Cumul (%)", range=[0,115], ticksuffix="%", tickfont=dict(size=9)))
+                yaxis=dict(title="Total Downtime (h)", gridcolor="#F0E8E0",
+                           tickfont=dict(size=9)),
+                yaxis2=dict(title="Cumul (%)", range=[0,115], ticksuffix="%",
+                             tickfont=dict(size=9)))
             insert_fig(_fp, "Downtime Pareto", w_px=720, h_px=290)
 
-        section(" CAUSE ANALYSIS")
-        _sc = df_in[COL_STATUS].value_counts().reset_index()
-        _sc.columns = ["Statut", "Nombre"]
-        _pie_c = {"PRODUCTION":"#27AE60","micro stops":"#E8650A",
-                  "Réparation Peripheri":"#C0392B","Réparation":"#C0392B"}
-        _fpi = go.Figure(go.Pie(
-            labels=_sc["Statut"], values=_sc["Nombre"], hole=0.55,
-            marker=dict(colors=[_pie_c.get(s,"#A8A8A8") for s in _sc["Statut"]],
-                        line=dict(color="white", width=3)),
-            textinfo="percent+label", textfont=dict(size=10), hoverinfo="skip"))
-        _fpi.update_layout(
-            height=300, width=720, showlegend=True,
-            paper_bgcolor="white", plot_bgcolor="white",
-            margin=dict(l=20,r=20,t=20,b=20),
-            legend=dict(orientation="h", x=0, y=-0.15, font=dict(size=9)),
-            annotations=[dict(text=f"<b>{len(df_in):,}</b><br>events",
-                               x=0.5, y=0.5, showarrow=False,
-                               font=dict(size=13, color="#1B2A4A"))])
-        insert_fig(_fpi, "Machine status breakdown", w_px=720, h_px=300)
         story.append(PageBreak())
 
-        #  Page 3: Criticality + Daily Trend 
-        section(" CRITICALITY MATRIX  (MTTR vs MTBF)")
-        _ma_p = df_in.groupby(COL_MACHINE, as_index=False).agg(
-            tm=("mttr_h","sum"), tb=("mtbf_h","sum"), nb_evt=(COL_STATUS,"count"))
-        _ma_p["dispo"] = _ma_p.apply(
-            lambda r: round(r.tb/(r.tb+r.tm)*100,1) if (r.tb+r.tm)>0 else 100.0, axis=1)
-        _mx = _ma_p["tm"].max()*1.55 or 10
-        _my = _ma_p["tb"].max()*1.55 or 100
-        _midx, _midy = _mx/2, _my/2
-        _fmat = go.Figure()
-        for _x0,_y0,_x1,_y1,_c in [
-            (0,_midy,_midx,_my,"rgba(39,174,96,0.09)"),
-            (_midx,_midy,_mx,_my,"rgba(27,42,74,0.09)"),
-            (0,0,_midx,_midy,"rgba(230,126,34,0.09)"),
-            (_midx,0,_mx,_midy,"rgba(192,57,43,0.12)"),
-        ]:
-            _fmat.add_shape(type="rect",x0=_x0,y0=_y0,x1=_x1,y1=_y1,
-                             fillcolor=_c,line_width=0,layer="below")
-        for _txt,_x,_y,_tc in [
-            (" RELIABLE",_midx*0.04,_my*0.97,"#27AE60"),
-            (" WATCH",   _mx*0.54,  _my*0.97,"#1B2A4A"),
-            (" IMPROVE",  _midx*0.04,_my*0.47,"#F39C12"),
-            (" CRITICAL",_mx*0.54,  _my*0.47,"#C0392B"),
-        ]:
-            _fmat.add_annotation(x=_x,y=_y,text=_txt,showarrow=False,
-                font=dict(size=9,color=_tc),xanchor="left",yanchor="top")
-        _fmat.add_hline(y=_midy,line_dash="dot",line_color="#D4CFC9",line_width=1.5)
-        _fmat.add_vline(x=_midx,line_dash="dot",line_color="#D4CFC9",line_width=1.5)
-        for _i,_row in _ma_p.iterrows():
-            _c2=_PAL[_i%len(_PAL)]
-            _fmat.add_trace(go.Scatter(
-                x=[_row["tm"]],y=[_row["tb"]],
-                mode="markers+text",name=_row[COL_MACHINE],
-                text=[_row[COL_MACHINE]],textposition="top center",
-                textfont=dict(size=10,color=_c2),
-                marker=dict(size=min(52,max(20,int(_row["nb_evt"])*3)),
-                             color=_c2,opacity=0.88,
-                             line=dict(color="white",width=2.5)),
-                hoverinfo="skip"))
-        _fmat.update_layout(
-            height=340,width=720,showlegend=False,
-            paper_bgcolor="white",plot_bgcolor="#FAFAFA",
-            margin=dict(l=50,r=20,t=20,b=50),
-            xaxis=dict(title="Total MTTR (h)",range=[0,_mx],
-                       gridcolor="#F0E8E0",tickfont=dict(size=9),zeroline=False),
-            yaxis=dict(title="Total MTBF (h)",range=[0,_my],
-                       gridcolor="#F0E8E0",tickfont=dict(size=9),zeroline=False))
-        insert_fig(_fmat, "Criticality Matrix", w_px=720, h_px=340)
-
-        section("── DAILY AVAILABILITY TREND")
-        if "date_only" in df_in.columns:
-            _da = df_in.groupby("date_only").agg(
-                mt=("mttr_h","sum"),mb=("mtbf_h","sum")).reset_index()
-            _da["dp"] = _da.apply(
-                lambda r: round(r.mb/(r.mb+r.mt)*100,1) if (r.mb+r.mt)>0 else 100.0, axis=1)
-            _dm2 = df_in.groupby(["date_only",COL_MACHINE]).agg(
-                mt=("mttr_h","sum"),mb=("mtbf_h","sum")).reset_index()
-            _dm2["dp"] = _dm2.apply(
-                lambda r: round(r.mb/(r.mb+r.mt)*100,1) if (r.mb+r.mt)>0 else 100.0, axis=1)
-            _fevo = go.Figure()
-            _fevo.add_trace(go.Scatter(
-                x=_da["date_only"],y=[95]*len(_da),
-                mode="lines",line=dict(color="#C0392B",dash="dot",width=1.5),
-                hoverinfo="skip"))
-            for _i2,_mac in enumerate(sorted(_dm2[COL_MACHINE].unique())):
-                _d2=_dm2[_dm2[COL_MACHINE]==_mac].sort_values("date_only")
-                _c3=_PAL[_i2%len(_PAL)]
-                _fevo.add_trace(go.Scatter(
-                    x=_d2["date_only"],y=_d2["dp"],
-                    mode="lines+markers",name=_mac,
-                    line=dict(color=_c3,width=1.8),
-                    marker=dict(size=5,color=_c3),
-                    hoverinfo="skip"))
-            _fevo.add_trace(go.Scatter(
-                x=_da["date_only"],y=_da["dp"],
-                mode="lines",name=" Global",
-                line=dict(color="#1B2A4A",width=3,dash="dot"),
-                hoverinfo="skip"))
-            _fevo.update_layout(
-                height=290,width=720,showlegend=True,
-                paper_bgcolor="white",plot_bgcolor="#FAFAFA",
-                margin=dict(l=44,r=16,t=16,b=52),
-                yaxis=dict(ticksuffix="%",range=[60,105],
-                           gridcolor="#F0E8E0",tickfont=dict(size=9),zeroline=False),
-                xaxis=dict(tickformat="%d/%m/%y",gridcolor="#F0E8E0",
-                           tickfont=dict(size=9),zeroline=False,tickangle=-35),
-                legend=dict(orientation="h",x=0,y=-0.25,font=dict(size=8)))
-            insert_fig(_fevo, "Daily availability trend", w_px=720, h_px=290)
-        story.append(PageBreak())
-
-        #  Page 4: Trend Analysis 
-        story.append(Paragraph("TREND ANALYSIS / ANALYSE DES TENDANCES", S_SEC))
+        # Page 3: Trend Analysis
+        story.append(Paragraph("TREND ANALYSIS — MEAN MTTR / MEAN MTBF / AVAILABILITY", S_SEC))
         story.append(hr(thick=2))
         story.append(Spacer(1, 0.1*cm))
         _df_w, _df_m = _pdf_te_agg(df_in)
@@ -2340,41 +2167,44 @@ with tab_kpi:
             ("Monthly View", _df_m, _has_month, "Month"),
         ]:
             if not _has_v:
-                story.append(Paragraph(
-                    f" {_view_lbl} — insufficient data.", S_CAP))
+                story.append(Paragraph(f"[{_view_lbl} — insufficient data.]", S_CAP))
                 continue
             story.append(Paragraph(_view_lbl, S_SSEC))
             story.append(hr(color=C_NAVY, thick=0.8))
             insert_fig(
-                _make_trend_fig(_df_v, "dispo", f"Availability (%) — {_view_lbl}",
+                _make_trend_fig(_df_v, "dispo",
+                                f"Availability (%) — {_view_lbl}  [MTBF/(MTBF+MTTR)]",
                                 "#27AE60", target=95, h_px=250),
                 f"Availability {_view_lbl.lower()}", w_px=720, h_px=250)
             insert_fig(
-                _make_trend_fig(_df_v, "mttr_h", f"MTTR total (h) — {_view_lbl}",
+                _make_trend_fig(_df_v, "mean_mttr_h",
+                                f"Mean MTTR (h) — {_view_lbl}  [Total DT / Failures]",
                                 "#E8650A", h_px=230),
-                f"Cumulative MTTR {_view_lbl.lower()}", w_px=720, h_px=230)
+                f"Mean MTTR {_view_lbl.lower()}", w_px=720, h_px=230)
             if has_mtbf:
                 insert_fig(
-                    _make_trend_fig(_df_v, "mtbf_h", f"MTBF total (h) — {_view_lbl}",
+                    _make_trend_fig(_df_v, "mean_mtbf_h",
+                                    f"Mean MTBF (h) — {_view_lbl}  [Total UT / Failures]",
                                     "#1B2A4A", h_px=230),
-                    f"Cumulative MTBF {_view_lbl.lower()}", w_px=720, h_px=230)
+                    f"Mean MTBF {_view_lbl.lower()}", w_px=720, h_px=230)
             story.append(Spacer(1, 0.2*cm))
             story.append(Paragraph(f"Summary Table — {_view_lbl}", S_SSEC))
             story.append(_recap_pdf_table(_df_v, _periode_col))
             story.append(Spacer(1, 0.4*cm))
         story.append(PageBreak())
 
-        #  Page 5: Summary Table 
-        section(" SUMMARY TABLE BY MACHINE")
-        _hd_ma = [["Machine","MTTR Total (h)","MTBF Total (h)","Events","Availability (%)"]]
+        # Page 4: Summary Table by Machine
+        section("📋 SUMMARY TABLE BY MACHINE")
+        _hd_ma = [["Machine","Mean MTTR (h)","Mean MTBF (h)","Failures","Events","Availability (%)"]]
         _rows_ma = []
         _ext_ma  = []
         for _ri, _row in ma_table.iterrows():
             _d = float(_row["Availability (%)"])
             _rows_ma.append([
                 str(_row["Machine"]),
-                f"{float(_row['Total MTTR (h)']):.4f}",
-                f"{float(_row['Total MTBF (h)']):.2f}",
+                f"{float(_row['Mean MTTR (h)']):.4f}",
+                f"{float(_row['Mean MTBF (h)']):.4f}",
+                str(int(_row["Failures"])),
                 str(int(_row["Events"])),
                 f"{_d:.1f}%"])
             _ri_t = len(_rows_ma)
@@ -2385,18 +2215,18 @@ with tab_kpi:
                      else HexColor("#784212") if _d>=90
                      else HexColor("#922B21"))
             _ext_ma += [
-                ("BACKGROUND",(4,_ri_t),(4,_ri_t),_ebg),
-                ("TEXTCOLOR", (4,_ri_t),(4,_ri_t),_etc),
-                ("FONTNAME",  (4,_ri_t),(4,_ri_t),"Helvetica-Bold"),
+                ("BACKGROUND",(5,_ri_t),(5,_ri_t),_ebg),
+                ("TEXTCOLOR", (5,_ri_t),(5,_ri_t),_etc),
+                ("FONTNAME",  (5,_ri_t),(5,_ri_t),"Helvetica-Bold"),
             ]
         story.append(_tbl(_hd_ma+_rows_ma,
-                           [IW*x for x in [0.18,0.20,0.20,0.17,0.25]],
+                           [IW*x for x in [0.15,0.18,0.18,0.14,0.12,0.23]],
                            fs=9, extras=_ext_ma))
         story.append(Spacer(1, 0.3*cm))
 
         if not pareto_df.empty:
-            section(" DOWNTIME PARETO — DÉTAIL")
-            _hd_p  = [["Machine","MTTR Total (h)","Part (%)","Cumul (%)"]]
+            section("🔻 DOWNTIME PARETO — DETAIL")
+            _hd_p  = [["Machine","Total Downtime (h)","Part (%)","Cumul (%)"]]
             _rows_p = [[str(r["Machine"]),
                          f"{float(r['MTTR_total_h']):.3f}",
                          f"{float(r['Pct']):.1f}%",
@@ -2404,52 +2234,13 @@ with tab_kpi:
                         for _,r in pareto_df.iterrows()]
             story.append(_tbl(_hd_p+_rows_p,
                                [IW*x for x in [0.30,0.28,0.21,0.21]], fs=9))
+
         story.append(PageBreak())
 
-        #  Page 6: Qualified Stops 
-        section(" QUALIFIED STOPS — TECHNICIAN INPUT")
-        if all(c in df_in.columns for c in ["Shift","Key Failure"]):
-            def _nb(v): return str(v).strip() not in ("","None","nan")
-            _qdf = df_in[
-                (df_in["mttr_h"]>0) &
-                df_in[["Shift","Key Failure"]].apply(
-                    lambda r: _nb(r["Shift"]) or _nb(r["Key Failure"]), axis=1)]
-            if not _qdf.empty:
-                _qcols = [c for c in [COL_MACHINE, COL_DATE, COL_STATUS,
-                                       "User ID","Shift","Key Failure","mttr_h"]
-                           if c in _qdf.columns]
-                _qmap  = {COL_MACHINE:"Machine", COL_DATE:"Date",
-                           COL_STATUS:"Statut", "User ID":"User ID",
-                           "Shift":"Shift", "Key Failure":"Key Failure",
-                           "mttr_h":"MTTR (h)"}
-                _hd_q  = [[_qmap.get(c,c) for c in _qcols]]
-                _rows_q = []
-                for _,_row in _qdf[_qcols].iterrows():
-                    _rv=[]
-                    for _c in _qcols:
-                        _v=_row[_c]
-                        if _c=="mttr_h":
-                            _rv.append(f"{float(_v):.3f}" if pd.notna(_v) else "—")
-                        elif _c==COL_DATE:
-                            try:    _rv.append(pd.to_datetime(_v).strftime("%m/%d/%Y"))
-                            except: _rv.append(str(_v)[:10])
-                        else:
-                            _s=str(_v) if pd.notna(_v) else "—"
-                            _rv.append(_s[:34]+"…" if len(_s)>35 else _s)
-                    _rows_q.append(_rv)
-                story.append(Paragraph(f"{len(_rows_q)} qualified stop(s).", S_BODY))
-                story.append(Spacer(1,0.15*cm))
-                story.append(_tbl(_hd_q+_rows_q,
-                                   [IW/len(_qcols)]*len(_qcols), fs=7))
-            else:
-                story.append(Paragraph("No qualified stops for the selected period.", S_BODY))
-        else:
-            story.append(Paragraph("Shift / Key Failure columns not available.", S_BODY))
-
-        #  Page 7: Spare Parts Cost 
+        # Page 5: Spare Parts
         story.append(PageBreak())
         _hdr_cost = Table([[
-            Paragraph("  SPARE PARTS &amp; MAINTENANCE COSTS",
+            Paragraph("⚙  SPARE PARTS &amp; MAINTENANCE COSTS",
                       ps("sph", fontSize=16, fontName="Helvetica-Bold",
                          textColor=C_WH, leading=20)),
             Paragraph("Financial breakdown by event",
@@ -2481,7 +2272,7 @@ with tab_kpi:
         _n_cost_events = len(_cd)
         _n_parts_filled = int(
             _cd["Spare Part Ref"].astype(str).str.strip()
-            .replace({"":"", "nan":"", "None":""}).ne("").sum()
+            .replace({"":"","nan":"","None":""}).ne("").sum()
         ) if "Spare Part Ref" in _cd.columns else 0
 
         _kpi_cost_data = [
@@ -2510,8 +2301,6 @@ with tab_kpi:
         story.append(Spacer(1, 0.35*cm))
 
         if not _cd.empty:
-            story.append(Paragraph(" Event Detail", S_SSEC))
-            story.append(hr(color=C_NAVY, thick=0.8))
             _cost_hdr = [["Machine","Date","Shift","Key Failure",
                            "Spare Part / Ref","Qty","Unit Price (€)","Total Cost (€)"]]
             _cost_rows_pdf = []
@@ -2538,30 +2327,6 @@ with tab_kpi:
             story.append(_tbl(_cost_hdr+_cost_rows_pdf, _cws_cost, fs=7, extras=_cost_extras))
             story.append(Spacer(1, 0.3*cm))
 
-            _by_mac = (_cd.groupby(COL_MACHINE)["Total Part Cost"]
-                       .sum().reset_index()
-                       .sort_values("Total Part Cost", ascending=False))
-            if len(_by_mac) >= 1:
-                story.append(Paragraph(" Cost by Machine", S_SSEC))
-                story.append(hr(color=C_NAVY, thick=0.8))
-                _fbar = go.Figure(go.Bar(
-                    x=_by_mac[COL_MACHINE],
-                    y=_by_mac["Total Part Cost"],
-                    marker=dict(
-                        color=["#E8650A" if i==0 else "#1B2A4A" for i in range(len(_by_mac))],
-                        line=dict(width=0)),
-                    text=[f"€{v:,.2f}" for v in _by_mac["Total Part Cost"]],
-                    textposition="outside", hoverinfo="skip"))
-                _fbar.update_layout(
-                    height=260, width=720, showlegend=False,
-                    paper_bgcolor="white", plot_bgcolor="#FAFAFA",
-                    margin=dict(l=44,r=16,t=16,b=44),
-                    xaxis=dict(tickfont=dict(size=10), gridcolor="#F0E8E0"),
-                    yaxis=dict(title="Cost (€)", gridcolor="#F0E8E0",
-                               tickprefix="€", tickfont=dict(size=9)))
-                insert_fig(_fbar, "Spare parts by machine", w_px=720, h_px=260)
-
-            story.append(Spacer(1, 0.2*cm))
             _tot_t = Table([[
                 Paragraph("TOTAL SPARE PARTS EXPENDITURE",
                           ps("totp", fontSize=11, fontName="Helvetica-Bold", textColor=C_WH)),
@@ -2579,8 +2344,7 @@ with tab_kpi:
             ]))
             story.append(_tot_t)
         else:
-            story.append(Paragraph(
-                "No spare parts costs recorded for this period.", S_BODY))
+            story.append(Paragraph("No spare parts costs recorded for this period.", S_BODY))
 
         def add_footer(canvas_obj, doc):
             canvas_obj.saveState()
@@ -2588,8 +2352,8 @@ with tab_kpi:
             canvas_obj.setFillColorRGB(0.63, 0.47, 0.34)
             canvas_obj.drawCentredString(
                 W/2, 1.35*cm,
-                f"≡ TE CONNECTIVITY  ·  STAMPING DEPT  ·  TANGIER     |     "
-                f"TPM KPI DASHBOARD     |     "
+                f"≡ TE CONNECTIVITY  ·  STAMPING CMMS  ·  TANGIER     |     "
+                f"Mean MTTR · Mean MTBF · Availability = MTBF/(MTBF+MTTR)     |     "
                 f"{datetime.now().strftime('%d/%m/%Y')}     |     "
                 f"Page {doc.page}")
             canvas_obj.setStrokeColorRGB(0.91, 0.40, 0.04)
@@ -2609,8 +2373,8 @@ with tab_kpi:
         try:
             _pdf_bytes = build_pdf(df, kpi, ma_disp, pareto)
             st.download_button(
-                " DOWNLOAD PDF REPORT", data=_pdf_bytes,
-                file_name=f"TE_TPM_{today_str}.pdf", mime="application/pdf",
+                "⬇ DOWNLOAD PDF REPORT", data=_pdf_bytes,
+                file_name=f"TE_CMMS_{today_str}.pdf", mime="application/pdf",
                 use_container_width=True)
         except Exception as _e:
             st.warning(f"PDF: `pip install reportlab` ({_e})")
@@ -2618,23 +2382,23 @@ with tab_kpi:
         try:
             _xl = export_excel(df, kpi)
             st.download_button(
-                " EXCEL MULTI-SHEET", data=_xl,
-                file_name=f"TE_KPI_{today_str}.xlsx",
+                "⬇ EXCEL MULTI-SHEET", data=_xl,
+                file_name=f"TE_CMMS_{today_str}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True)
         except Exception as _e:
             st.warning(f"Excel: {_e}")
     with ec3:
         st.download_button(
-            " CSV PARETO",
+            "⬇ CSV PARETO",
             data=pareto.to_csv(index=False, sep=";").encode("utf-8"),
             file_name=f"TE_pareto_{today_str}.csv",
             mime="text/csv", use_container_width=True)
 
 
-# 
+# ══════════════════════════════════════════════════════════════════════════════
 #  TAB 2 — STOPS QUALIFICATION
-# 
+# ══════════════════════════════════════════════════════════════════════════════
 with tab_qual:
 
     def _is_qualified(r):
@@ -2643,8 +2407,7 @@ with tab_qual:
                               "Issue Description", "Action Taken", "Spare Part Ref"])
 
     _check_cols = [c for c in ["Shift","Key Failure"] if c in df.columns]
-    _qual_n = int(df[_check_cols].apply(_is_qualified, axis=1).sum()) \
-        if _check_cols else 0
+    _qual_n = int(df[_check_cols].apply(_is_qualified, axis=1).sum()) if _check_cols else 0
     _stop_n = int((df["mttr_h"] > 0).sum())
     _pct_q  = (_qual_n / _stop_n * 100) if _stop_n > 0 else 0
 
@@ -2657,14 +2420,14 @@ with tab_qual:
         <div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;
                       color:{TE_ORANGE};letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">
-             Stops Qualification
+            📋 Stops Qualification
           </div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:10px;
                       color:rgba(255,255,255,0.6);line-height:1.9">
             Fill in <strong style="color:{TE_ORANGE2}">User ID</strong>,
             <strong style="color:{TE_ORANGE2}">Shift</strong>
             and <strong style="color:{TE_ORANGE2}">Key Failure</strong>
-            · Click <strong style="color:{TE_ORANGE2}"> Save Changes</strong> to persist on disk
+            · Click <strong style="color:{TE_ORANGE2}">💾 Save Changes</strong> to persist on disk
           </div>
         </div>
         <div style="text-align:right">
@@ -2694,7 +2457,6 @@ with tab_qual:
     </div>
     """, unsafe_allow_html=True)
 
-    #  Persistent save indicator 
     if os.path.exists(PERSISTENT_CSV):
         _fsize = os.path.getsize(PERSISTENT_CSV)
         _fmod  = datetime.fromtimestamp(os.path.getmtime(PERSISTENT_CSV))
@@ -2703,13 +2465,13 @@ with tab_qual:
                     border-left:4px solid {TE_GREEN};border-radius:8px;
                     padding:8px 14px;margin-bottom:10px;font-size:11px;
                     color:#145a32;display:flex;align-items:center;gap:10px">
-           <span>Persistent file active: <strong>{PERSISTENT_CSV}</strong>
+           💾 <span>Persistent file active: <strong>{PERSISTENT_CSV}</strong>
           &nbsp;·&nbsp; {_fsize/1024:.1f} KB
           &nbsp;·&nbsp; Last saved: <strong>{_fmod.strftime('%d/%m/%Y %H:%M')}</strong></span>
         </div>
         """, unsafe_allow_html=True)
 
-    #  Quick Search filters 
+    # ── Quick Search ──
     st.markdown(f"""
     <div style="background:{TE_WHITE};border:1px solid #EDE0D4;
                 border-left:4px solid {TE_ORANGE};border-radius:10px;
@@ -2717,7 +2479,7 @@ with tab_qual:
       <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
                   letter-spacing:2.5px;text-transform:uppercase;
                   color:{TE_ORANGE};margin-bottom:10px">
-         Quick Search
+        🔍 Quick Search
       </div>
     """, unsafe_allow_html=True)
 
@@ -2725,19 +2487,15 @@ with tab_qual:
     _fcol1, _fcol2 = st.columns(2)
 
     with _fcol1:
-        _machines_avail = ["All"] + sorted(
-            _df_stops[COL_MACHINE].dropna().unique().tolist())
-        _filter_machine = st.selectbox(
-            " Machine ID", options=_machines_avail, index=0,
-            key="q_filter_machine")
-
+        _machines_avail = ["All"] + sorted(_df_stops[COL_MACHINE].dropna().unique().tolist())
+        _filter_machine = st.selectbox("⚙ Machine ID", options=_machines_avail,
+                                       index=0, key="q_filter_machine")
     with _fcol2:
         _dates_raw    = pd.to_datetime(_df_stops[COL_DATE], errors="coerce").dropna()
         _dates_avail  = sorted(_dates_raw.dt.date.unique())
         _date_options = ["All"] + [d.strftime("%m/%d/%Y") for d in _dates_avail]
-        _filter_date_str = st.selectbox(
-            " Exact Date", options=_date_options, index=0,
-            key="q_filter_date")
+        _filter_date_str = st.selectbox("📅 Exact Date", options=_date_options,
+                                         index=0, key="q_filter_date")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2745,8 +2503,7 @@ with tab_qual:
         COL_MACHINE, COL_DATE, COL_STATUS, "mttr_h",
         "User ID", "Shift", "Key Failure",
         "Issue Description", "Action Taken",
-        "Spare Part Ref", "Qty", "Unit Price (€)",
-        "Total Part Cost",
+        "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
     ] if c in df.columns]
 
     _df_base = _df_stops.copy()
@@ -2760,15 +2517,14 @@ with tab_qual:
                 == _target_date.date()]
 
     _orig_idx = _df_base.index.values
-
-    _df_show = _df_base[_display_cols].copy()
+    _df_show  = _df_base[_display_cols].copy()
     if COL_DATE in _df_show.columns:
         _df_show[COL_DATE] = (
             pd.to_datetime(_df_show[COL_DATE], errors="coerce")
             .dt.strftime("%m/%d/%Y").fillna("—"))
     _df_show = _df_show.reset_index(drop=True)
 
-    _n_shown    = len(_df_show)
+    _n_shown     = len(_df_show)
     _is_filtered = _filter_machine != "All" or _filter_date_str != "All"
     st.markdown(
         f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;'
@@ -2796,45 +2552,37 @@ with tab_qual:
             column_order=_display_cols,
             column_config={
                 COL_MACHINE: st.column_config.TextColumn(
-                    " Machine", disabled=True, width="small"),
+                    "⚙ Machine", disabled=True, width="small"),
                 COL_DATE: st.column_config.TextColumn(
-                    " Date", disabled=True, width="small"),
+                    "📅 Date", disabled=True, width="small"),
                 COL_STATUS: st.column_config.TextColumn(
-                    " Status", disabled=True, width="medium"),
+                    "📌 Status", disabled=True, width="medium"),
                 "mttr_h": st.column_config.NumberColumn(
-                    "⏱ MTTR (h)", format="%.4f",
-                    disabled=True, width="small"),
+                    "⏱ MTTR (h)", format="%.4f", disabled=True, width="small"),
                 "User ID": st.column_config.TextColumn(
-                    " User ID", disabled=False, width="small",
-                    max_chars=20,
-                    help="Your technician badge / employee ID"),
+                    "👤 User ID", disabled=False, width="small",
+                    max_chars=20, help="Your technician badge / employee ID"),
                 "Shift": st.column_config.SelectboxColumn(
-                    " Shift", options=SHIFTS,
-                    required=False, width="small",
+                    "🕐 Shift", options=SHIFTS, required=False, width="small",
                     help="A (6-14h) · B (14-22h) · C (22-6h)"),
                 "Key Failure": st.column_config.SelectboxColumn(
-                    " Key Failure", options=KEY_FAILURES,
-                    required=False, width="large",
-                    help="Root cause of the stop"),
+                    "🔧 Key Failure", options=KEY_FAILURES,
+                    required=False, width="large", help="Root cause of the stop"),
                 "Issue Description": st.column_config.TextColumn(
-                    " Issue Description", disabled=False, width="large",
-                    max_chars=300),
+                    "📝 Issue Description", disabled=False, width="large", max_chars=300),
                 "Action Taken": st.column_config.TextColumn(
-                    " Action Taken", disabled=False, width="large",
-                    max_chars=300),
+                    "✅ Action Taken", disabled=False, width="large", max_chars=300),
                 "Spare Part Ref": st.column_config.TextColumn(
-                    " Spare Part / Ref", disabled=False, width="medium",
-                    max_chars=100),
+                    "🔩 Spare Part / Ref", disabled=False, width="medium", max_chars=100),
                 "Qty": st.column_config.NumberColumn(
-                    " Qty", disabled=False, width="small",
+                    "🔢 Qty", disabled=False, width="small",
                     min_value=0, step=1, default=0),
                 "Unit Price (€)": st.column_config.NumberColumn(
-                    " Unit Price (€)", disabled=False, width="small",
+                    "💶 Unit Price (€)", disabled=False, width="small",
                     min_value=0.0, step=0.01, format="%.2f", default=0.0),
                 "Total Part Cost": st.column_config.NumberColumn(
-                    " Total Cost (€)", disabled=True, width="small",
-                    format="%.2f",
-                    help="Qty × Unit Price (auto-calculated on Save)"),
+                    "💰 Total Cost (€)", disabled=True, width="small",
+                    format="%.2f", help="Qty × Unit Price (auto-calculated on Save)"),
             },
             key="qual_editor_v6"
         )
@@ -2850,7 +2598,7 @@ with tab_qual:
                             border:1.5px solid #27AE60;border-radius:8px;
                             padding:10px 18px;margin:6px 0;
                             display:flex;align-items:center;gap:12px">
-                  <span style="font-size:20px"></span>
+                  <span style="font-size:20px">💰</span>
                   <div>
                     <span style="font-family:'Barlow Condensed',sans-serif;
                                  font-size:10px;color:rgba(255,255,255,0.5);
@@ -2862,34 +2610,27 @@ with tab_qual:
                       € {_live_cost:,.2f}
                     </span>
                     <span style="font-size:10px;color:rgba(255,255,255,0.4);margin-left:8px">
-                      (click  Save to update global KPI and persist to disk)
+                      (click 💾 Save to update global KPI and persist to disk)
                     </span>
                   </div>
                 </div>""", unsafe_allow_html=True)
 
-        #  Save button 
+        # ── Save button ──
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
         _sb_left, _sb_mid, _sb_right = st.columns([1.5, 2, 1.5])
         with _sb_mid:
             _save_clicked = st.button(
-                "  SAVE CHANGES",
-                type="primary",
-                use_container_width=True,
-                key="btn_save_qual",
+                "💾  SAVE CHANGES", type="primary",
+                use_container_width=True, key="btn_save_qual",
                 help="Save entries and write to disk (tpm_data_persistent.csv)")
 
-        #  Excel export button 
+        # ── Excel export ──
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
         def _build_excel_export():
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-
             _src = st.session_state.edited_df.copy()
-            _INTERNAL = {"mttr_h", "mtbf_h", "date_only",
-                         "_sort_key", "_month_num", "_month_year",
-                         "_month_year_n", "_week_num", "_week_year_n",
-                         "_month_lbl", "_week_lbl", "_week_year"}
-
+            _INTERNAL = {"mttr_h", "mtbf_h", "date_only"}
             for _c in ["User ID", "Shift", "Key Failure",
                        "Issue Description", "Action Taken", "Spare Part Ref"]:
                 if _c in _src.columns:
@@ -2903,23 +2644,21 @@ with tab_qual:
             if "mttr_h" in _src.columns:
                 _src["MTTR (h)"] = _src["mttr_h"].round(4)
             if "mtbf_h" in _src.columns:
-                _src["MTBF (h)"] = _src["mtbf_h"].round(3)
+                _src["MTBF (h)"] = _src["mtbf_h"].round(4)
             if COL_DATE in _src.columns:
                 _parsed = pd.to_datetime(_src[COL_DATE], errors="coerce")
                 _src[COL_DATE] = _parsed.dt.strftime("%m/%d/%Y").fillna("")
-
             _hydra_base = [c for c in _src.columns
                            if c not in _INTERNAL
-                           and c not in ["User ID", "Shift", "Key Failure",
-                                         "Issue Description", "Action Taken",
-                                         "Spare Part Ref", "Qty",
-                                         "Unit Price (€)", "Total Part Cost",
-                                         "MTTR (h)", "MTBF (h)"]]
-            _metric_cols = [c for c in ["MTTR (h)", "MTBF (h)"] if c in _src.columns]
+                           and c not in ["User ID","Shift","Key Failure",
+                                         "Issue Description","Action Taken",
+                                         "Spare Part Ref","Qty",
+                                         "Unit Price (€)","Total Part Cost",
+                                         "MTTR (h)","MTBF (h)"]]
+            _metric_cols = [c for c in ["MTTR (h)","MTBF (h)"] if c in _src.columns]
             _qual_cols   = [c for c in [
-                "User ID", "Shift", "Key Failure",
-                "Issue Description", "Action Taken",
-                "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
+                "User ID","Shift","Key Failure","Issue Description","Action Taken",
+                "Spare Part Ref","Qty","Unit Price (€)","Total Part Cost",
             ] if c in _src.columns]
             _all_cols = _hydra_base + _metric_cols + _qual_cols
 
@@ -2966,10 +2705,11 @@ with tab_qual:
                     return (str(r.get("Shift","")).strip() not in ("","nan","None") or
                             str(r.get("Key Failure","")).strip() not in ("","nan","None"))
                 _stops["Qualified"] = _stops[_stops_cols].apply(
-                    _mark_qual, axis=1).map({True:" Yes", False:" No"})
+                    _mark_qual, axis=1).map({True:"✅ Yes", False:"✗ No"})
                 _stops2_cols = _stops_cols + ["Qualified"]
                 _stops[_stops2_cols].to_excel(_writer, sheet_name="Stops", index=False)
-                _style_sheet(_writer.sheets["Stops"], _stops[_stops2_cols], header_color="E8650A")
+                _style_sheet(_writer.sheets["Stops"], _stops[_stops2_cols],
+                             header_color="E8650A")
 
                 _cost_rows = _stops[
                     pd.to_numeric(_stops.get("Total Part Cost", pd.Series([0])),
@@ -3001,7 +2741,7 @@ with tab_qual:
                 _excel_bytes = _build_excel_export()
                 _ts_xl = datetime.now().strftime("%Y%m%d_%H%M")
                 st.download_button(
-                    label="  EXPORT QUALIFIED DATA (EXCEL)",
+                    label="⬇  EXPORT QUALIFIED DATA (EXCEL)",
                     data=_excel_bytes,
                     file_name=f"TE_Qualification_{_ts_xl}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument"
@@ -3010,9 +2750,9 @@ with tab_qual:
                     key="btn_export_excel"
                 )
             except Exception as _ex_err:
-                st.warning(f" Excel export unavailable: {_ex_err}")
+                st.warning(f"⚠ Excel export unavailable: {_ex_err}")
 
-        #  SAVE LOGIC — persists to disk 
+        # ── SAVE LOGIC ──
         if _save_clicked and _edited is not None:
             _n_saved = 0
             _ALL_SAVE_COLS = [
@@ -3038,17 +2778,13 @@ with tab_qual:
                     st.session_state.edited_df.loc[_orig_idx, _col] = _new_vals
                     _n_saved += len(_orig_idx)
 
-            # Recalculate Total Part Cost globally
             _edf2 = st.session_state.edited_df
             _edf2["Total Part Cost"] = (
                 pd.to_numeric(_edf2["Qty"], errors="coerce").fillna(0) *
                 pd.to_numeric(_edf2["Unit Price (€)"], errors="coerce").fillna(0.0)
             ).round(2)
             st.session_state.edited_df = _edf2
-
-            #  WRITE TO DISK 
             save_persistent(st.session_state.edited_df)
-
             st.session_state["_save_result"] = _n_saved
             st.rerun()
 
@@ -3060,7 +2796,7 @@ with tab_qual:
                             border-left:5px solid {TE_GREEN};border-radius:10px;
                             padding:14px 20px;margin-top:6px;
                             display:flex;align-items:center;gap:14px">
-                  <span style="font-size:24px"></span>
+                  <span style="font-size:24px">✅</span>
                   <div>
                     <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;
                                 font-weight:800;color:#1e8449;text-transform:uppercase;
@@ -3080,21 +2816,19 @@ with tab_qual:
                             border-left:5px solid {TE_AMBER};border-radius:10px;
                             padding:12px 18px;margin-top:6px;
                             display:flex;align-items:center;gap:10px">
-                  <span style="font-size:18px"></span>
+                  <span style="font-size:18px">⚠</span>
                   <span style="font-size:12px;color:#5d4037">
                     No changes detected compared to last save.
                   </span>
                 </div>
                 """, unsafe_allow_html=True)
 
-    #  Summary section 
+    # ── Qualified Stops Summary ──
     if _qual_n > 0:
-        st.markdown(f'<div class="te-section">Qualified Stops Summary</div>',
+        st.markdown(f'<div class="te-section">📋 Qualified Stops Summary</div>',
                     unsafe_allow_html=True)
-
         _q_all = df[df[["Shift","Key Failure"]].apply(_is_qualified, axis=1)]
         _ts    = datetime.now().strftime("%Y%m%d_%H%M")
-
         _cost_total_q = 0.0
         if st.session_state.edited_df is not None and "Total Part Cost" in st.session_state.edited_df.columns:
             _cost_total_q = float(
@@ -3103,30 +2837,26 @@ with tab_qual:
 
         _qm1, _qm2, _qm3, _qm4 = st.columns(4)
         with _qm1:
-            st.metric(" Qualified Stops", f"{_qual_n} / {_stop_n}",
+            st.metric("📋 Qualified Stops", f"{_qual_n} / {_stop_n}",
                       delta=f"{_pct_q:.0f}% of total")
         with _qm2:
             _uid_n = int((_q_all.get("User ID", pd.Series(dtype=str))
                            .astype(str).str.strip()
-                           .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
-                           .notna()).sum())
-            st.metric(" With User ID", f"{_uid_n} rows",
+                           .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA}).notna()).sum())
+            st.metric("👤 With User ID", f"{_uid_n} rows",
                       delta="signed" if _uid_n > 0 else "none")
         with _qm3:
             _kf_n = int((_q_all.get("Key Failure", pd.Series(dtype=str))
                           .astype(str).str.strip()
-                          .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA})
-                          .notna()).sum())
-            st.metric(" Key Failure filled", f"{_kf_n} rows")
+                          .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA}).notna()).sum())
+            st.metric("🔧 Key Failure filled", f"{_kf_n} rows")
         with _qm4:
-            st.metric(" Spare Parts Cost", f"€ {_cost_total_q:,.2f}",
+            st.metric("💰 Spare Parts Cost", f"€ {_cost_total_q:,.2f}",
                       delta="recorded" if _cost_total_q > 0 else "no costs yet")
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
         _q_exp_cols = [c for c in [
-            COL_MACHINE, COL_DATE, COL_STATUS,
-            "mttr_h", "User ID", "Shift", "Key Failure",
+            COL_MACHINE, COL_DATE, COL_STATUS, "mttr_h", "User ID", "Shift", "Key Failure",
             "Issue Description", "Action Taken",
             "Spare Part Ref", "Qty", "Unit Price (€)", "Total Part Cost",
         ] if c in _q_all.columns]
@@ -3134,26 +2864,27 @@ with tab_qual:
         _ec1, _ec2 = st.columns(2)
         with _ec1:
             st.download_button(
-                f" CSV — {_qual_n} QUALIFIED STOP(S)",
-                data=_q_all[_q_exp_cols].to_csv(
-                    index=False, sep=";").encode("utf-8"),
-                file_name=f"TE_arrets_qualifies_{_ts}.csv",
-                mime="text/csv",
-                use_container_width=True)
+                f"⬇ CSV — {_qual_n} QUALIFIED STOP(S)",
+                data=_q_all[_q_exp_cols].to_csv(index=False, sep=";").encode("utf-8"),
+                file_name=f"TE_qualified_stops_{_ts}.csv",
+                mime="text/csv", use_container_width=True)
         with _ec2:
-            st.info(f" **{_qual_n}** qualified stop(s) · "
-                    f"Full PDF report available in ** KPIs** tab · "
+            st.info(f"📊 **{_qual_n}** qualified stop(s) · "
+                    f"Full PDF report available in **⚙ KPIs** tab · "
                     f"Data persisted to **{PERSISTENT_CSV}**")
 
 
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 #  FOOTER
-# 
+# ──────────────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;
             letter-spacing:2px;color:#C0A080;padding:24px 0 12px;
             border-top:1px solid #E0D0C0;margin-top:32px">
-    ≡ TE CONNECTIVITY · STAMPING DEPARTMENT · TANGIER<br>
-    TPM KPI DASHBOARD · {datetime.now().strftime('%m/%d/%Y')}
+    ≡ TE CONNECTIVITY · STAMPING CMMS · TANGIER<br>
+    Mean MTTR = Total Downtime / Failures &nbsp;·&nbsp;
+    Mean MTBF = Total Uptime / Failures &nbsp;·&nbsp;
+    Availability = MTBF / (MTBF + MTTR)<br>
+    {datetime.now().strftime('%m/%d/%Y')}
 </div>
 """, unsafe_allow_html=True)
