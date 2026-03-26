@@ -3,5 +3,5 @@ pandas
 numpy
 plotly
 openpyxl
-kaleido
+kaleido==0.1.0post1
 reportlab
