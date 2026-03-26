@@ -414,6 +414,94 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] small {
 ::-webkit-scrollbar-thumb {{ background: {TE_ORANGE3}; border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {TE_ORANGE}; }}
 
+/* ══════════════════════════════════════════════════════
+   INPUT FIELDS — Force dark brown text on white bg
+   Fixes: selectbox, date_input, text_input placeholders
+   ══════════════════════════════════════════════════════ */
+
+/* Selectbox — selected value + placeholder */
+[data-baseweb="select"] div,
+[data-baseweb="select"] span,
+[data-baseweb="select"] input,
+[data-baseweb="select"] [data-testid="stMarkdownContainer"] {{
+    color: #5D4037 !important;
+}}
+/* Selectbox trigger button text */
+[data-baseweb="select"] > div > div {{
+    color: #5D4037 !important;
+    background-color: white !important;
+}}
+/* Selectbox placeholder specifically */
+[data-baseweb="select"] [data-testid="stSelectbox"] span,
+[data-baseweb="select"] [aria-disabled="false"] span {{
+    color: #5D4037 !important;
+    opacity: 1 !important;
+}}
+/* Dropdown menu options */
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] [role="option"],
+[data-baseweb="menu"] li {{
+    color: #5D4037 !important;
+    background-color: white !important;
+}}
+[data-baseweb="popover"] li:hover,
+[data-baseweb="menu"] li:hover {{
+    background-color: #FFF0E6 !important;
+    color: {TE_ORANGE} !important;
+}}
+
+/* Date input — selected date text */
+[data-testid="stDateInput"] input,
+[data-testid="stDateInput"] div,
+[data-testid="stDateInput"] span {{
+    color: #5D4037 !important;
+    background-color: white !important;
+}}
+/* Date input placeholder */
+[data-testid="stDateInput"] input::placeholder {{
+    color: #9A7A60 !important;
+    opacity: 1 !important;
+}}
+
+/* Text input */
+[data-testid="stTextInput"] input,
+[data-testid="stTextInput"] textarea {{
+    color: #5D4037 !important;
+    background-color: white !important;
+}}
+[data-testid="stTextInput"] input::placeholder {{
+    color: #9A7A60 !important;
+    opacity: 1 !important;
+}}
+
+/* Number input */
+[data-testid="stNumberInput"] input {{
+    color: #5D4037 !important;
+    background-color: white !important;
+}}
+
+/* Multiselect — tags and placeholder */
+[data-testid="stMultiSelect"] [data-baseweb="input"] input,
+[data-testid="stMultiSelect"] [data-baseweb="input"] span {{
+    color: #5D4037 !important;
+}}
+/* Multiselect tags in main area (not sidebar) */
+.stApp [data-testid="stMultiSelect"] span[data-baseweb="tag"] span {{
+    color: white !important;
+}}
+
+/* Generic baseweb input */
+[data-baseweb="input"] input,
+[data-baseweb="textarea"] textarea {{
+    color: #5D4037 !important;
+    background: white !important;
+}}
+[data-baseweb="input"] input::placeholder,
+[data-baseweb="textarea"] textarea::placeholder {{
+    color: #9A7A60 !important;
+    opacity: 1 !important;
+}}
+
 /* ── Sidebar toggle button — inside sidebar ── */
 [data-testid="stSidebar"] [data-testid="stButton"]:has(button[kind="secondary"]) button,
 [data-testid="stSidebar"] .stButton button {{
