@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore")
 # ──────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="TE Connectivity — Stamping CMMS",
-    page_icon="⚙",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -382,6 +382,80 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] small {
 ::-webkit-scrollbar-track {{ background: #F0EAE3; }}
 ::-webkit-scrollbar-thumb {{ background: {TE_ORANGE3}; border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {TE_ORANGE}; }}
+
+/* ── Sidebar toggle button — inside sidebar ── */
+[data-testid="stSidebar"] [data-testid="stButton"]:has(button[kind="secondary"]) button,
+[data-testid="stSidebar"] .stButton button {{
+    background: linear-gradient(135deg, {TE_ORANGE} 0%, {TE_DARK} 100%) !important;
+    color: white !important;
+    border: 2px solid {TE_ORANGE3} !important;
+    border-radius: 10px !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    padding: 12px 20px !important;
+    width: 100% !important;
+    box-shadow: 0 4px 18px rgba(232,101,10,0.45), 0 0 0 1px rgba(232,101,10,0.2) !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}}
+[data-testid="stSidebar"] .stButton button:hover {{
+    background: linear-gradient(135deg, {TE_ORANGE3} 0%, {TE_ORANGE} 100%) !important;
+    box-shadow: 0 6px 28px rgba(232,101,10,0.65), 0 0 0 2px rgba(232,101,10,0.4) !important;
+    transform: translateY(-1px) !important;
+}}
+
+/* ── Floating "Show Sidebar" tab — fixed on left edge when sidebar is hidden ── */
+.sidebar-show-float {{
+    position: fixed !important;
+    top: 50% !important;
+    left: 0px !important;
+    transform: translateY(-50%) !important;
+    z-index: 99999 !important;
+    writing-mode: vertical-rl !important;
+    text-orientation: mixed !important;
+}}
+.sidebar-show-float button {{
+    background: linear-gradient(180deg, {TE_ORANGE} 0%, {TE_DARK} 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 0 8px 8px 0 !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    padding: 20px 10px !important;
+    width: 36px !important;
+    min-height: 120px !important;
+    cursor: pointer !important;
+    box-shadow: 4px 0 16px rgba(232,101,10,0.5) !important;
+    transition: all 0.2s ease !important;
+    writing-mode: vertical-lr !important;
+}}
+.sidebar-show-float button:hover {{
+    background: linear-gradient(180deg, {TE_ORANGE3} 0%, {TE_ORANGE} 100%) !important;
+    width: 44px !important;
+    box-shadow: 6px 0 24px rgba(232,101,10,0.7) !important;
+}}
+
+/* ── "Show Sidebar" button in main content (fallback) ── */
+[data-testid="stButton"].show-sidebar-main > button {{
+    background: linear-gradient(135deg, {TE_ORANGE}, {TE_DARK}) !important;
+    color: white !important;
+    border: 2px solid {TE_ORANGE3} !important;
+    border-radius: 0 10px 10px 0 !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    letter-spacing: 1.5px !important;
+    text-transform: uppercase !important;
+    padding: 14px 18px !important;
+    box-shadow: 4px 0 18px rgba(232,101,10,0.5) !important;
+    min-height: 56px !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -426,7 +500,7 @@ def load_persistent() -> pd.DataFrame:
             df_p.columns = [str(c).strip() for c in df_p.columns]
             return df_p
         except Exception as e:
-            st.warning(f"⚠ Could not read persistent file: {e}")
+            st.warning(f" Could not read persistent file: {e}")
     return pd.DataFrame()
 
 
@@ -434,7 +508,7 @@ def save_persistent(df_to_save: pd.DataFrame):
     try:
         df_to_save.to_csv(PERSISTENT_CSV, index=False, encoding="utf-8")
     except Exception as e:
-        st.error(f"✗ Could not save to disk: {e}")
+        st.error(f" Could not save to disk: {e}")
 
 
 def merge_qualifications(df_new: pd.DataFrame,
@@ -491,7 +565,7 @@ def load_data(f) -> pd.DataFrame:
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except Exception as e:
-        st.error(f"✗ File read error : `{e}`")
+        st.error(f" File read error : `{e}`")
         return pd.DataFrame()
 
 
@@ -510,7 +584,7 @@ def sec_to_h(s):
     return round(float(s) / 3600.0, 4) if not pd.isna(s) else 0.0
 
 
-def dl_png(fig, filename, label="⬇ Download PNG"):
+def dl_png(fig, filename, label="Download PNG"):
     try:
         img = fig.to_image(format="png", width=1400, height=680, scale=2)
         st.download_button(label=label, data=img, file_name=filename,
@@ -566,12 +640,14 @@ def export_excel(df: pd.DataFrame, kpi: dict) -> bytes:
         if "by_machine" in kpi and not kpi["by_machine"].empty:
             ws2 = wb.create_sheet("By Machine")
             bm  = kpi["by_machine"].copy()
-            bm.columns = ["Machine","Mean MTTR (h)","Mean MTBF (h)","Failures","Availability (%)"]
+            # ma has columns: machine_id, mean_mttr_h, mean_mtbf_h, nb_failures, nb_events, dispo
+            bm  = bm[[COL_MACHINE, "mean_mttr_h", "mean_mtbf_h", "nb_failures", "nb_events", "dispo"]].copy()
+            bm.columns = ["Machine","Mean MTTR (h)","Mean MTBF (h)","Failures","Events","Availability (%)"]
             for ci, col_name in enumerate(bm.columns, start=1):
                 hdr_style(ws2, 1, ci, col_name, bg="1B2A4A")
             for ri, row_vals in enumerate(bm.itertuples(index=False), start=2):
                 for ci, v in enumerate(row_vals, start=1):
-                    ws2.cell(ri, ci, round(v, 4) if isinstance(v, float) else v)
+                    ws2.cell(ri, ci, round(v, 4) if isinstance(v, float) else (int(v) if hasattr(v, "item") else v))
             auto_width(ws2)
         if "pareto" in kpi and not kpi["pareto"].empty:
             ws3 = wb.create_sheet("Pareto Downtime")
@@ -625,10 +701,70 @@ def _hex_to_rgba(hex_color: str, alpha: float = 0.1) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  SIDEBAR STATE INIT
+# ──────────────────────────────────────────────────────────────────────────────
+if "sidebar_open" not in st.session_state:
+    st.session_state.sidebar_open = True
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  SIDEBAR VISIBILITY STATE
+# ──────────────────────────────────────────────────────────────────────────────
+if not st.session_state.get("sidebar_open", True):
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"] {
+        width: 0px !important;
+        min-width: 0px !important;
+        max-width: 0px !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        border: none !important;
+        visibility: hidden !important;
+    }
+    [data-testid="stSidebar"] > div { display: none !important; }
+    .block-container { padding-left: 1rem !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  SIDEBAR
 # ──────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
+    # ── Hide sidebar button — slim strip at very top ──
+    st.markdown(f"""
+    <style>
+    [data-testid="stSidebar"] .hide-btn-wrap > div[data-testid="stButton"] > button {{
+        background: rgba(255,255,255,0.06) !important;
+        color: rgba(240,232,223,0.55) !important;
+        border: 1px solid rgba(232,101,10,0.25) !important;
+        border-radius: 6px !important;
+        font-family: 'Barlow Condensed', sans-serif !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 2px !important;
+        text-transform: uppercase !important;
+        padding: 5px 10px !important;
+        height: 28px !important;
+        width: 100% !important;
+        text-align: right !important;
+        transition: all 0.2s ease !important;
+    }}
+    [data-testid="stSidebar"] .hide-btn-wrap > div[data-testid="stButton"] > button:hover {{
+        background: rgba(232,101,10,0.18) !important;
+        color: {TE_ORANGE} !important;
+        border-color: rgba(232,101,10,0.6) !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="hide-btn-wrap">', unsafe_allow_html=True)
+    if st.button("Hide  <<", key="btn_hide_sidebar", use_container_width=True):
+        st.session_state.sidebar_open = False
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
     st.markdown(f"""
     <div style="background:rgba(232,101,10,0.12);border:1px solid rgba(232,101,10,0.35);
                 border-radius:10px;padding:12px 14px;margin-bottom:16px">
@@ -645,11 +781,10 @@ with st.sidebar:
 
     st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                 f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                f'⊞ NAVIGATION</p>', unsafe_allow_html=True)
-
+                f'NAVIGATION</p>', unsafe_allow_html=True)
     nav_choice = st.radio(
         "",
-        options=["⚙ Dashboard", "📋 History"],
+        options=["Dashboard", "History"],
         index=0, key="nav_radio", label_visibility="collapsed"
     )
 
@@ -657,7 +792,7 @@ with st.sidebar:
 
     st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                 f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                f'⬆ IMPORT DATA</p>', unsafe_allow_html=True)
+                f'IMPORT DATA</p>', unsafe_allow_html=True)
 
     uploaded = st.file_uploader(
         "", type=["csv", "xlsx", "xls"],
@@ -669,13 +804,90 @@ with st.sidebar:
     if uploaded is not None:
         st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                     f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
-                    f'⊟ FILTERS</p>', unsafe_allow_html=True)
+                    f'FILTERS</p>', unsafe_allow_html=True)
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SHOW MENU BANNER — rendered when sidebar is hidden, on every page
+# ══════════════════════════════════════════════════════════════════════════════
+if not st.session_state.get("sidebar_open", True):
+    st.markdown(f"""
+    <style>
+    /* Show Menu button — large orange pro button */
+    div[data-testid="stButton"][class*="show-menu-btn"] > button,
+    .show-menu-wrap > div[data-testid="stButton"] > button {{
+        background: linear-gradient(135deg, {TE_ORANGE} 0%, {TE_DARK} 100%) !important;
+        color: white !important;
+        border: 2px solid {TE_ORANGE3} !important;
+        border-radius: 12px !important;
+        font-family: 'Barlow Condensed', sans-serif !important;
+        font-size: 16px !important;
+        font-weight: 900 !important;
+        letter-spacing: 3px !important;
+        text-transform: uppercase !important;
+        padding: 14px 36px !important;
+        height: 52px !important;
+        box-shadow: 0 4px 22px rgba(232,101,10,0.55), 0 0 0 3px rgba(232,101,10,0.12) !important;
+        transition: all 0.22s ease !important;
+        animation: glow-pulse 2.2s ease-in-out infinite !important;
+    }}
+    .show-menu-wrap > div[data-testid="stButton"] > button:hover {{
+        background: linear-gradient(135deg, #F0934A 0%, {TE_ORANGE} 100%) !important;
+        box-shadow: 0 6px 32px rgba(232,101,10,0.8), 0 0 0 5px rgba(232,101,10,0.18) !important;
+        transform: translateY(-2px) !important;
+    }}
+    @keyframes glow-pulse {{
+        0%,100% {{ box-shadow: 0 4px 22px rgba(232,101,10,0.55), 0 0 0 3px rgba(232,101,10,0.12); }}
+        50%      {{ box-shadow: 0 4px 30px rgba(232,101,10,0.85), 0 0 0 7px rgba(232,101,10,0.06); }}
+    }}
+    /* Banner container */
+    .show-menu-banner {{
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        background: linear-gradient(135deg, {TE_BLACK} 0%, #2A1A0A 100%);
+        border: 1px solid rgba(232,101,10,0.35);
+        border-left: 5px solid {TE_ORANGE};
+        border-radius: 12px;
+        padding: 14px 24px;
+        margin-bottom: 18px;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+    }}
+    .show-menu-banner-text {{
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(240,220,200,0.6);
+    }}
+    .show-menu-banner-text strong {{
+        color: {TE_ORANGE};
+        font-size: 12px;
+    }}
+    </style>
+    <div class="show-menu-banner">
+        <div class="show-menu-banner-text">
+            <strong>≡ TE CONNECTIVITY</strong><br>
+            Sidebar is hidden — click to restore navigation
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _sm_c1, _sm_c2, _sm_c3 = st.columns([2, 3, 6])
+    with _sm_c2:
+        st.markdown('<div class="show-menu-wrap">', unsafe_allow_html=True)
+        if st.button(">> Show Menu", key="btn_show_menu", use_container_width=True):
+            st.session_state.sidebar_open = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PAGE: HISTORY
 # ══════════════════════════════════════════════════════════════════════════════
-if nav_choice == "📋 History":
+if nav_choice == "History":
 
     st.markdown(f"""
     <div class="hist-header">
@@ -709,14 +921,14 @@ if nav_choice == "📋 History":
         st.markdown(f"""
         <div style="background:{TE_WHITE};border:2px dashed #F0C8A0;border-radius:14px;
                     padding:48px;text-align:center;margin:32px auto;max-width:480px">
-          <div style="font-size:40px;margin-bottom:12px">📂</div>
+          <div style="font-size:40px;margin-bottom:12px"></div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;
                       font-weight:800;color:{TE_BLACK};text-transform:uppercase;
                       margin-bottom:8px">No History Yet</div>
           <div style="font-size:13px;color:#9A7A60;line-height:1.7">
             No persistent data found.<br>
             Import a Hydra file, qualify some stops<br>
-            and click <strong>💾 Save Changes</strong> to populate this page.
+            and click <strong> Save Changes</strong> to populate this page.
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -767,28 +979,28 @@ if nav_choice == "📋 History":
         st.stop()
 
     # ── FILTER HISTORY ──
-    st.markdown(f'<div class="te-section">⊟ FILTER HISTORY</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="te-section">FILTER HISTORY</div>', unsafe_allow_html=True)
     _hf1, _hf2, _hf3 = st.columns(3)
 
     with _hf1:
         _hmachines = ["All"] + sorted(
             df_qualified_hist[COL_MACHINE].dropna().unique().tolist()
         ) if COL_MACHINE in df_qualified_hist.columns else ["All"]
-        _hfm = st.selectbox("⚙ Machine", _hmachines, key="hist_machine")
+        _hfm = st.selectbox(" Machine", _hmachines, key="hist_machine")
 
     with _hf2:
         _hkf_opts = ["All"] + sorted(
             df_qualified_hist["Key Failure"].dropna()
             .replace({"": "N/A", "nan": "N/A"}).unique().tolist()
         ) if "Key Failure" in df_qualified_hist.columns else ["All"]
-        _hfkf = st.selectbox("🔧 Key Failure", _hkf_opts, key="hist_kf")
+        _hfkf = st.selectbox(" Key Failure", _hkf_opts, key="hist_kf")
 
     with _hf3:
         _hshift_opts = ["All"] + sorted(
             df_qualified_hist["Shift"].dropna()
             .replace({"": "N/A"}).unique().tolist()
         ) if "Shift" in df_qualified_hist.columns else ["All"]
-        _hfsh = st.selectbox("🕐 Shift", _hshift_opts, key="hist_shift")
+        _hfsh = st.selectbox(" Shift", _hshift_opts, key="hist_shift")
 
     _dh = df_qualified_hist.copy()
     if _hfm != "All" and COL_MACHINE in _dh.columns:
@@ -806,7 +1018,7 @@ if nav_choice == "📋 History":
         unsafe_allow_html=True)
 
     # ── QUALIFIED STOPS TABLE ──
-    st.markdown(f'<div class="te-section">📋 QUALIFIED STOPS TABLE</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="te-section"> QUALIFIED STOPS TABLE</div>', unsafe_allow_html=True)
 
     _hist_disp_cols = [c for c in [
         COL_MACHINE, COL_DATE, COL_STATUS, "mttr_h",
@@ -831,7 +1043,7 @@ if nav_choice == "📋 History":
 
     # ── Charts ──
     if len(_dh) >= 2:
-        st.markdown(f'<div class="te-section">📊 ANALYSIS</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="te-section">ANALYSIS</div>', unsafe_allow_html=True)
         _ch1, _ch2 = st.columns(2)
 
         with _ch1:
@@ -882,19 +1094,19 @@ if nav_choice == "📋 History":
             st.markdown("</div>", unsafe_allow_html=True)
 
     # ── EXPORT HISTORY ──
-    st.markdown(f'<div class="te-section">⬇ EXPORT HISTORY</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="te-section">EXPORT HISTORY</div>', unsafe_allow_html=True)
     _exp1, _exp2 = st.columns(2)
     _ts_hist = datetime.now().strftime("%Y%m%d_%H%M")
     with _exp1:
         st.download_button(
-            "⬇ CSV — QUALIFIED HISTORY",
+            "CSV  QUALIFIED HISTORY",
             data=_dh[_hist_disp_cols].to_csv(index=False, sep=";").encode("utf-8"),
             file_name=f"TE_History_Qualified_{_ts_hist}.csv",
             mime="text/csv", use_container_width=True
         )
     with _exp2:
         st.download_button(
-            "⬇ CSV — FULL PERSISTENT DATA",
+            "CSV  FULL PERSISTENT DATA",
             data=df_hist.to_csv(index=False, sep=";").encode("utf-8"),
             file_name=f"TE_Persistent_Full_{_ts_hist}.csv",
             mime="text/csv", use_container_width=True
@@ -902,14 +1114,14 @@ if nav_choice == "📋 History":
 
     # ── RESET HISTORY ──
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f'<div class="te-section">🗑 DANGER ZONE</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="te-section">DANGER ZONE</div>', unsafe_allow_html=True)
 
     st.markdown(f"""
     <div style="background:#1a0a0a;border:2px solid {TE_RED};border-radius:12px;
                 padding:18px 24px;margin-bottom:12px">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;
                   color:{TE_RED};text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">
-        🗑 Reset History
+         Reset History
       </div>
       <div style="font-size:12px;color:#C0A080;line-height:1.7">
         This will permanently delete <strong style="color:{TE_WHITE}">{PERSISTENT_CSV}</strong>
@@ -923,30 +1135,30 @@ if nav_choice == "📋 History":
 
     _r1, _r2, _r3 = st.columns([2, 1.5, 2])
     with _r2:
-        if st.button("🗑️ Reset History", key="btn_reset_trigger",
+        if st.button(" Reset History", key="btn_reset_trigger",
                      help="Permanently delete all persistent data"):
             st.session_state.confirm_reset = True
 
     if st.session_state.confirm_reset:
         st.warning(
-            f"⚠️ **Are you sure?**  \n"
+            f" **Are you sure?**  \n"
             f"This will delete **{len(df_hist):,} rows** from `{PERSISTENT_CSV}`.  \n"
             f"This action **cannot be undone**."
         )
         _confirm1, _confirm2, _confirm3 = st.columns([2, 1, 2])
         with _confirm1:
-            if st.button("✅ Yes, Delete Everything", key="btn_reset_confirm",
+            if st.button(" Yes, Delete Everything", key="btn_reset_confirm",
                          help="Confirm permanent deletion"):
                 try:
                     os.remove(PERSISTENT_CSV)
                     st.session_state.confirm_reset = False
                     st.session_state.edited_df = None
-                    st.success("✅ History deleted successfully. The persistent file has been removed.")
+                    st.success(" History deleted successfully. The persistent file has been removed.")
                     st.rerun()
                 except Exception as _e:
-                    st.error(f"✗ Could not delete file: {_e}")
+                    st.error(f" Could not delete file: {_e}")
         with _confirm2:
-            if st.button("✗ Cancel", key="btn_reset_cancel"):
+            if st.button(" Cancel", key="btn_reset_cancel"):
                 st.session_state.confirm_reset = False
                 st.rerun()
 
@@ -965,7 +1177,7 @@ if uploaded is None:
             f'<div style="background:#eafaf1;border:1.5px solid #a9dfbf;'
             f'border-radius:8px;padding:10px 16px;margin-top:12px;'
             f'font-size:12px;color:#145a32">'
-            f'✅ Persistent file found: <strong>{len(df_persist_check):,} rows</strong>'
+            f' Persistent file found: <strong>{len(df_persist_check):,} rows</strong>'
             f' — import a Hydra file to continue with saved qualifications.'
             f'</div>'
         )
@@ -1092,7 +1304,7 @@ if COL_DATE in df_raw.columns:
     df_raw[COL_DATE] = parsed
     df_raw["date_only"] = df_raw[COL_DATE].dt.normalize()
     if df_raw["date_only"].notna().sum() == 0:
-        st.warning(f"⚠ Column `{COL_DATE}`: no valid date parsed.")
+        st.warning(f" Column `{COL_DATE}`: no valid date parsed.")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1122,15 +1334,15 @@ with st.sidebar:
     st.markdown(f"""
     <div style="font-size:10px;color:rgba(255,255,255,0.3);
                 font-family:'JetBrains Mono',monospace;letter-spacing:1px">
-        📄 {uploaded.name}<br>
-        📊 {len(df_raw):,} rows<br>
-        💾 Persistent: {"✅ " + str(os.path.exists(PERSISTENT_CSV)) if os.path.exists(PERSISTENT_CSV) else "✗ none"}<br><br>
+         {uploaded.name}<br>
+         {len(df_raw):,} rows<br>
+         Persistent: {" " + str(os.path.exists(PERSISTENT_CSV)) if os.path.exists(PERSISTENT_CSV) else " none"}<br><br>
         TE CONNECTIVITY © {datetime.now().year}
     </div>
     """, unsafe_allow_html=True)
 
 if not sel_machines:
-    st.warning("⚠ Please select at least one machine.")
+    st.warning(" Please select at least one machine.")
     st.stop()
 
 df = df_raw[df_raw[COL_MACHINE].isin(sel_machines)].copy()
@@ -1230,7 +1442,7 @@ else:
 #  HEADER
 # ──────────────────────────────────────────────────────────────────────────────
 dispo_col = TE_GREEN if dispo >= 95 else TE_AMBER if dispo >= 90 else TE_RED
-dispo_lbl = "On Target ✓" if dispo >= 95 else "Watch ⚠" if dispo >= 90 else "Critical ✗"
+dispo_lbl = "On Target " if dispo >= 95 else "Watch " if dispo >= 90 else "Critical "
 
 st.markdown(f"""
 <div class="te-header">
@@ -1240,7 +1452,7 @@ st.markdown(f"""
       <div class="te-header-title">Stamping <span>CMMS</span></div>
       <div class="te-header-sub">Mean MTTR · Mean MTBF · Availability · Criticality · Pareto Analysis</div>
       <div class="te-header-badge">
-        ⚙ {df[COL_MACHINE].nunique()} machine{"s" if df[COL_MACHINE].nunique()>1 else ""}
+         {df[COL_MACHINE].nunique()} machine{"s" if df[COL_MACHINE].nunique()>1 else ""}
         &nbsp;·&nbsp; {len(df):,} events
         &nbsp;·&nbsp; <span style="color:{dispo_col};font-weight:700">{dispo}% — {dispo_lbl}</span>
       </div>
@@ -1261,7 +1473,7 @@ if not has_mtbf:
     <div style="background:#fff8e1;border:1px solid #ffe082;border-left:4px solid {TE_AMBER};
                 border-radius:8px;padding:10px 18px;font-size:12px;color:#5d4037;
                 margin-bottom:12px;display:flex;align-items:center;gap:10px">
-        ⚠ <span><strong>MTBF column absent or empty.</strong>
+         <span><strong>MTBF column absent or empty.</strong>
       Availability computed from machine status (PRODUCTION rows / total).</span>
     </div>
     """, unsafe_allow_html=True)
@@ -1271,8 +1483,8 @@ if not has_mtbf:
 #  TABS
 # ──────────────────────────────────────────────────────────────────────────────
 tab_kpi, tab_qual = st.tabs([
-    "⚙  Performance Analysis (KPIs)",
-    "📋  Stops Qualification",
+    "  Performance Analysis (KPIs)",
+    "  Stops Qualification",
 ])
 
 
@@ -1349,7 +1561,7 @@ with tab_kpi:
     # ──────────────────────────────────────────────────────────────────────────
     #  PERFORMANCE TREND — Mean-based aggregation per period
     # ──────────────────────────────────────────────────────────────────────────
-    st.markdown('<div class="te-section">📈 Performance Trend</div>', unsafe_allow_html=True)
+    st.markdown('<div class="te-section"> Performance Trend</div>', unsafe_allow_html=True)
 
     if "date_only" in df.columns:
         _MONTH_FR = {1:"Jan", 2:"Feb", 3:"Mar", 4:"Apr", 5:"May", 6:"Jun",
@@ -1480,7 +1692,7 @@ with tab_kpi:
                 height=min(420, len(_tbl) * 36 + 42))
 
         _chart_choice = st.radio(
-            "📊 Select chart to display:",
+            " Select chart to display:",
             options=["Availability (%)", "Mean MTTR (h)", "Mean MTBF (h)"],
             index=0, horizontal=True, key="te_chart_pick")
 
@@ -1504,10 +1716,10 @@ with tab_kpi:
                 _te_line(x, _y, _ttl, _yt, _clr, target=_tgt, y_fmt=_fmt, height=460),
                 use_container_width=True, config=PCONF)
             if _sel == "Mean MTBF (h)" and not is_mtbf:
-                st.caption("⚠ MTBF column absent from Hydra file.")
+                st.caption(" MTBF column absent from Hydra file.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        _stab_w, _stab_m = st.tabs(["📅  Weekly View", "📆  Monthly View"])
+        _stab_w, _stab_m = st.tabs(["  Weekly View", "  Monthly View"])
 
         with _stab_w:
             if len(_df_week) < 2:
@@ -1526,16 +1738,16 @@ with tab_kpi:
                 _te_recap_table(_df_month, "Month")
 
     else:
-        st.info("⚠ Column `plant_shift_date` absent — time trend unavailable.")
+        st.info(" Column `plant_shift_date` absent — time trend unavailable.")
 
     # ── Pareto + Pie ──
-    st.markdown('<div class="te-section">📊 Pareto & Cause Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="te-section"> Pareto & Cause Analysis</div>', unsafe_allow_html=True)
     col_l, col_r = st.columns(2, gap="medium")
 
     with col_l:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">🔻 Downtime Pareto</div></div>""",
+          <div class="chart-title"> Downtime Pareto</div></div>""",
           unsafe_allow_html=True)
         if not pareto.empty:
             bc = [TE_ORANGE if i < 2 else TE_NAVY if i < 4 else "#A8A8A8"
@@ -1570,7 +1782,7 @@ with tab_kpi:
             top1 = pareto.iloc[0]
             top2_pct = pareto.head(2)["Pct"].sum()
             st.markdown(
-                f'<div class="te-insight-crit">⚠ <strong>{top1["Machine"]}</strong> '
+                f'<div class="te-insight-crit"> <strong>{top1["Machine"]}</strong> '
                 f'= <strong>{top1["Pct"]}%</strong> of total downtime. '
                 f'Top 2 machines = <strong>{top2_pct:.1f}%</strong>.</div>',
                 unsafe_allow_html=True)
@@ -1581,7 +1793,7 @@ with tab_kpi:
     with col_r:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">🔵 Cause Analysis</div></div>""",
+          <div class="chart-title"> Cause Analysis</div></div>""",
           unsafe_allow_html=True)
         sc = df[COL_STATUS].value_counts().reset_index()
         sc.columns = ["Statut", "Nombre"]
@@ -1607,20 +1819,20 @@ with tab_kpi:
             rc = int(rep_row["Nombre"].sum())
             dominant = "Micro-Stops" if mc > rc else "Repairs"
             st.markdown(
-                f'<div class="te-insight">📌 <strong>{dominant}</strong> dominate '
+                f'<div class="te-insight"> <strong>{dominant}</strong> dominate '
                 f'({max(mc,rc)} occurrences). '
                 f'{"Focus on 5S and standardization." if mc > rc else "Strengthen preventive maintenance."}'
                 f'</div>', unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Criticality Matrix + Daily Trend ──
-    st.markdown('<div class="te-section">🎯 Criticality & Time Trend</div>', unsafe_allow_html=True)
+    st.markdown('<div class="te-section"> Criticality & Time Trend</div>', unsafe_allow_html=True)
     col_a, col_b = st.columns([2, 3], gap="medium")
 
     with col_a:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">🎯 Criticality Matrix</div></div>""",
+          <div class="chart-title"> Criticality Matrix</div></div>""",
           unsafe_allow_html=True)
         # Use mean MTTR / mean MTBF for criticality axes
         mx_v = ma["mean_mttr_h"].max() * 1.55 or 10
@@ -1671,14 +1883,14 @@ with tab_kpi:
           <div class="quad q-good"><h5>↖ Reliable + Fast</h5><p>Maintain standard PM</p></div>
           <div class="quad q-watch"><h5>↗ Monitor</h5><p>Improve repair procedure</p></div>
           <div class="quad q-warn"><h5>↙ Improve</h5><p>Reinforced preventive PM</p></div>
-          <div class="quad q-crit"><h5>↘ Bad Actor ⚠</h5><p>Absolute TPM priority</p></div>
+          <div class="quad q-crit"><h5>↘ Bad Actor </h5><p>Absolute TPM priority</p></div>
         </div>""", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_b:
         st.markdown("""<div class="chart-card">
           <div class="chart-header"><div class="chart-dot"></div>
-          <div class="chart-title">📈 Daily Availability Trend</div></div>""",
+          <div class="chart-title"> Daily Availability Trend</div></div>""",
           unsafe_allow_html=True)
         if "date_only" in df.columns:
             # Daily availability using mean-based formula
@@ -1725,7 +1937,7 @@ with tab_kpi:
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Mean MTBF + Mean MTTR by Machine ──
-    st.markdown('<div class="te-section">⏱ Mean MTTR & Mean MTBF by Machine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="te-section"> Mean MTTR & Mean MTBF by Machine</div>', unsafe_allow_html=True)
     col_c, col_d = st.columns(2, gap="medium")
 
     with col_c:
@@ -1771,7 +1983,7 @@ with tab_kpi:
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Summary Table ──
-    st.markdown('<div class="te-section">📋 Summary Table by Machine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="te-section"> Summary Table by Machine</div>', unsafe_allow_html=True)
 
     ma_disp = ma.rename(columns={
         COL_MACHINE:      "Machine",
@@ -1788,18 +2000,18 @@ with tab_kpi:
     with ci1:
         if worst["Availability (%)"] < 90:
             st.markdown(
-                f'<div class="te-insight-crit">⚠ <strong>Bad Actor: {worst["Machine"]}</strong>'
+                f'<div class="te-insight-crit"> <strong>Bad Actor: {worst["Machine"]}</strong>'
                 f' — Avail. {worst["Availability (%)"]:.1f}% '
                 f'(Mean MTTR = {worst["Mean MTTR (h)"]:.3f} h). Priority TPM action.</div>',
                 unsafe_allow_html=True)
         else:
             st.markdown(
-                f'<div class="te-insight-ok">✅ All machines ≥ 90%. '
+                f'<div class="te-insight-ok"> All machines ≥ 90%. '
                 f'Best: <strong>{best["Machine"]}</strong> ({best["Availability (%)"]:.1f}%).</div>',
                 unsafe_allow_html=True)
     with ci2:
         st.markdown(
-            f'<div class="te-insight">📌 <strong>Mean MTTR (global):</strong> '
+            f'<div class="te-insight"> <strong>Mean MTTR (global):</strong> '
             f'{mttr_mean_h:.3f} h ({round(mttr_mean_h*60,1)} min) · '
             f'<strong>Total Failures:</strong> {nb_arrets} / {len(df):,} events · '
             f'Formula: Mean MTTR = Total Downtime / Failures</div>',
@@ -2122,7 +2334,7 @@ with tab_kpi:
         story.append(_kpi_card)
         story.append(Spacer(1, 0.4*cm))
 
-        section("🔻 DOWNTIME PARETO")
+        section(" DOWNTIME PARETO")
         if not pareto_df.empty:
             _bc = [TE_ORANGE if i<2 else TE_NAVY if i<4 else "#A8A8A8"
                    for i in range(len(pareto_df))]
@@ -2194,7 +2406,7 @@ with tab_kpi:
         story.append(PageBreak())
 
         # Page 4: Summary Table by Machine
-        section("📋 SUMMARY TABLE BY MACHINE")
+        section(" SUMMARY TABLE BY MACHINE")
         _hd_ma = [["Machine","Mean MTTR (h)","Mean MTBF (h)","Failures","Events","Availability (%)"]]
         _rows_ma = []
         _ext_ma  = []
@@ -2225,7 +2437,7 @@ with tab_kpi:
         story.append(Spacer(1, 0.3*cm))
 
         if not pareto_df.empty:
-            section("🔻 DOWNTIME PARETO — DETAIL")
+            section(" DOWNTIME PARETO — DETAIL")
             _hd_p  = [["Machine","Total Downtime (h)","Part (%)","Cumul (%)"]]
             _rows_p = [[str(r["Machine"]),
                          f"{float(r['MTTR_total_h']):.3f}",
@@ -2240,7 +2452,7 @@ with tab_kpi:
         # Page 5: Spare Parts
         story.append(PageBreak())
         _hdr_cost = Table([[
-            Paragraph("⚙  SPARE PARTS &amp; MAINTENANCE COSTS",
+            Paragraph("  SPARE PARTS &amp; MAINTENANCE COSTS",
                       ps("sph", fontSize=16, fontName="Helvetica-Bold",
                          textColor=C_WH, leading=20)),
             Paragraph("Financial breakdown by event",
@@ -2373,7 +2585,7 @@ with tab_kpi:
         try:
             _pdf_bytes = build_pdf(df, kpi, ma_disp, pareto)
             st.download_button(
-                "⬇ DOWNLOAD PDF REPORT", data=_pdf_bytes,
+                "DOWNLOAD PDF REPORT", data=_pdf_bytes,
                 file_name=f"TE_CMMS_{today_str}.pdf", mime="application/pdf",
                 use_container_width=True)
         except Exception as _e:
@@ -2382,7 +2594,7 @@ with tab_kpi:
         try:
             _xl = export_excel(df, kpi)
             st.download_button(
-                "⬇ EXCEL MULTI-SHEET", data=_xl,
+                "EXCEL MULTI-SHEET", data=_xl,
                 file_name=f"TE_CMMS_{today_str}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True)
@@ -2390,7 +2602,7 @@ with tab_kpi:
             st.warning(f"Excel: {_e}")
     with ec3:
         st.download_button(
-            "⬇ CSV PARETO",
+            "CSV PARETO",
             data=pareto.to_csv(index=False, sep=";").encode("utf-8"),
             file_name=f"TE_pareto_{today_str}.csv",
             mime="text/csv", use_container_width=True)
@@ -2420,14 +2632,14 @@ with tab_qual:
         <div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;
                       color:{TE_ORANGE};letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">
-            📋 Stops Qualification
+             Stops Qualification
           </div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:10px;
                       color:rgba(255,255,255,0.6);line-height:1.9">
             Fill in <strong style="color:{TE_ORANGE2}">User ID</strong>,
             <strong style="color:{TE_ORANGE2}">Shift</strong>
             and <strong style="color:{TE_ORANGE2}">Key Failure</strong>
-            · Click <strong style="color:{TE_ORANGE2}">💾 Save Changes</strong> to persist on disk
+            · Click <strong style="color:{TE_ORANGE2}"> Save Changes</strong> to persist on disk
           </div>
         </div>
         <div style="text-align:right">
@@ -2465,7 +2677,7 @@ with tab_qual:
                     border-left:4px solid {TE_GREEN};border-radius:8px;
                     padding:8px 14px;margin-bottom:10px;font-size:11px;
                     color:#145a32;display:flex;align-items:center;gap:10px">
-           💾 <span>Persistent file active: <strong>{PERSISTENT_CSV}</strong>
+            <span>Persistent file active: <strong>{PERSISTENT_CSV}</strong>
           &nbsp;·&nbsp; {_fsize/1024:.1f} KB
           &nbsp;·&nbsp; Last saved: <strong>{_fmod.strftime('%d/%m/%Y %H:%M')}</strong></span>
         </div>
@@ -2479,7 +2691,7 @@ with tab_qual:
       <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
                   letter-spacing:2.5px;text-transform:uppercase;
                   color:{TE_ORANGE};margin-bottom:10px">
-        🔍 Quick Search
+         Quick Search
       </div>
     """, unsafe_allow_html=True)
 
@@ -2488,13 +2700,13 @@ with tab_qual:
 
     with _fcol1:
         _machines_avail = ["All"] + sorted(_df_stops[COL_MACHINE].dropna().unique().tolist())
-        _filter_machine = st.selectbox("⚙ Machine ID", options=_machines_avail,
+        _filter_machine = st.selectbox(" Machine ID", options=_machines_avail,
                                        index=0, key="q_filter_machine")
     with _fcol2:
         _dates_raw    = pd.to_datetime(_df_stops[COL_DATE], errors="coerce").dropna()
         _dates_avail  = sorted(_dates_raw.dt.date.unique())
         _date_options = ["All"] + [d.strftime("%m/%d/%Y") for d in _dates_avail]
-        _filter_date_str = st.selectbox("📅 Exact Date", options=_date_options,
+        _filter_date_str = st.selectbox(" Exact Date", options=_date_options,
                                          index=0, key="q_filter_date")
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -2552,36 +2764,36 @@ with tab_qual:
             column_order=_display_cols,
             column_config={
                 COL_MACHINE: st.column_config.TextColumn(
-                    "⚙ Machine", disabled=True, width="small"),
+                    " Machine", disabled=True, width="small"),
                 COL_DATE: st.column_config.TextColumn(
-                    "📅 Date", disabled=True, width="small"),
+                    " Date", disabled=True, width="small"),
                 COL_STATUS: st.column_config.TextColumn(
-                    "📌 Status", disabled=True, width="medium"),
+                    " Status", disabled=True, width="medium"),
                 "mttr_h": st.column_config.NumberColumn(
-                    "⏱ MTTR (h)", format="%.4f", disabled=True, width="small"),
+                    " MTTR (h)", format="%.4f", disabled=True, width="small"),
                 "User ID": st.column_config.TextColumn(
-                    "👤 User ID", disabled=False, width="small",
+                    " User ID", disabled=False, width="small",
                     max_chars=20, help="Your technician badge / employee ID"),
                 "Shift": st.column_config.SelectboxColumn(
-                    "🕐 Shift", options=SHIFTS, required=False, width="small",
+                    " Shift", options=SHIFTS, required=False, width="small",
                     help="A (6-14h) · B (14-22h) · C (22-6h)"),
                 "Key Failure": st.column_config.SelectboxColumn(
-                    "🔧 Key Failure", options=KEY_FAILURES,
+                    " Key Failure", options=KEY_FAILURES,
                     required=False, width="large", help="Root cause of the stop"),
                 "Issue Description": st.column_config.TextColumn(
-                    "📝 Issue Description", disabled=False, width="large", max_chars=300),
+                    " Issue Description", disabled=False, width="large", max_chars=300),
                 "Action Taken": st.column_config.TextColumn(
-                    "✅ Action Taken", disabled=False, width="large", max_chars=300),
+                    " Action Taken", disabled=False, width="large", max_chars=300),
                 "Spare Part Ref": st.column_config.TextColumn(
-                    "🔩 Spare Part / Ref", disabled=False, width="medium", max_chars=100),
+                    " Spare Part / Ref", disabled=False, width="medium", max_chars=100),
                 "Qty": st.column_config.NumberColumn(
-                    "🔢 Qty", disabled=False, width="small",
+                    " Qty", disabled=False, width="small",
                     min_value=0, step=1, default=0),
                 "Unit Price (€)": st.column_config.NumberColumn(
-                    "💶 Unit Price (€)", disabled=False, width="small",
+                    " Unit Price (€)", disabled=False, width="small",
                     min_value=0.0, step=0.01, format="%.2f", default=0.0),
                 "Total Part Cost": st.column_config.NumberColumn(
-                    "💰 Total Cost (€)", disabled=True, width="small",
+                    " Total Cost (€)", disabled=True, width="small",
                     format="%.2f", help="Qty × Unit Price (auto-calculated on Save)"),
             },
             key="qual_editor_v6"
@@ -2598,7 +2810,7 @@ with tab_qual:
                             border:1.5px solid #27AE60;border-radius:8px;
                             padding:10px 18px;margin:6px 0;
                             display:flex;align-items:center;gap:12px">
-                  <span style="font-size:20px">💰</span>
+                  <span style="font-size:20px"></span>
                   <div>
                     <span style="font-family:'Barlow Condensed',sans-serif;
                                  font-size:10px;color:rgba(255,255,255,0.5);
@@ -2610,7 +2822,7 @@ with tab_qual:
                       € {_live_cost:,.2f}
                     </span>
                     <span style="font-size:10px;color:rgba(255,255,255,0.4);margin-left:8px">
-                      (click 💾 Save to update global KPI and persist to disk)
+                      (click  Save to update global KPI and persist to disk)
                     </span>
                   </div>
                 </div>""", unsafe_allow_html=True)
@@ -2620,7 +2832,7 @@ with tab_qual:
         _sb_left, _sb_mid, _sb_right = st.columns([1.5, 2, 1.5])
         with _sb_mid:
             _save_clicked = st.button(
-                "💾  SAVE CHANGES", type="primary",
+                "  SAVE CHANGES", type="primary",
                 use_container_width=True, key="btn_save_qual",
                 help="Save entries and write to disk (tpm_data_persistent.csv)")
 
@@ -2705,7 +2917,7 @@ with tab_qual:
                     return (str(r.get("Shift","")).strip() not in ("","nan","None") or
                             str(r.get("Key Failure","")).strip() not in ("","nan","None"))
                 _stops["Qualified"] = _stops[_stops_cols].apply(
-                    _mark_qual, axis=1).map({True:"✅ Yes", False:"✗ No"})
+                    _mark_qual, axis=1).map({True:" Yes", False:" No"})
                 _stops2_cols = _stops_cols + ["Qualified"]
                 _stops[_stops2_cols].to_excel(_writer, sheet_name="Stops", index=False)
                 _style_sheet(_writer.sheets["Stops"], _stops[_stops2_cols],
@@ -2741,7 +2953,7 @@ with tab_qual:
                 _excel_bytes = _build_excel_export()
                 _ts_xl = datetime.now().strftime("%Y%m%d_%H%M")
                 st.download_button(
-                    label="⬇  EXPORT QUALIFIED DATA (EXCEL)",
+                    label="EXPORT QUALIFIED DATA (EXCEL)",
                     data=_excel_bytes,
                     file_name=f"TE_Qualification_{_ts_xl}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument"
@@ -2750,7 +2962,7 @@ with tab_qual:
                     key="btn_export_excel"
                 )
             except Exception as _ex_err:
-                st.warning(f"⚠ Excel export unavailable: {_ex_err}")
+                st.warning(f" Excel export unavailable: {_ex_err}")
 
         # ── SAVE LOGIC ──
         if _save_clicked and _edited is not None:
@@ -2796,7 +3008,7 @@ with tab_qual:
                             border-left:5px solid {TE_GREEN};border-radius:10px;
                             padding:14px 20px;margin-top:6px;
                             display:flex;align-items:center;gap:14px">
-                  <span style="font-size:24px">✅</span>
+                  <span style="font-size:24px"></span>
                   <div>
                     <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;
                                 font-weight:800;color:#1e8449;text-transform:uppercase;
@@ -2816,7 +3028,7 @@ with tab_qual:
                             border-left:5px solid {TE_AMBER};border-radius:10px;
                             padding:12px 18px;margin-top:6px;
                             display:flex;align-items:center;gap:10px">
-                  <span style="font-size:18px">⚠</span>
+                  <span style="font-size:18px"></span>
                   <span style="font-size:12px;color:#5d4037">
                     No changes detected compared to last save.
                   </span>
@@ -2825,7 +3037,7 @@ with tab_qual:
 
     # ── Qualified Stops Summary ──
     if _qual_n > 0:
-        st.markdown(f'<div class="te-section">📋 Qualified Stops Summary</div>',
+        st.markdown(f'<div class="te-section">Qualified Stops Summary</div>',
                     unsafe_allow_html=True)
         _q_all = df[df[["Shift","Key Failure"]].apply(_is_qualified, axis=1)]
         _ts    = datetime.now().strftime("%Y%m%d_%H%M")
@@ -2837,21 +3049,21 @@ with tab_qual:
 
         _qm1, _qm2, _qm3, _qm4 = st.columns(4)
         with _qm1:
-            st.metric("📋 Qualified Stops", f"{_qual_n} / {_stop_n}",
+            st.metric(" Qualified Stops", f"{_qual_n} / {_stop_n}",
                       delta=f"{_pct_q:.0f}% of total")
         with _qm2:
             _uid_n = int((_q_all.get("User ID", pd.Series(dtype=str))
                            .astype(str).str.strip()
                            .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA}).notna()).sum())
-            st.metric("👤 With User ID", f"{_uid_n} rows",
+            st.metric(" With User ID", f"{_uid_n} rows",
                       delta="signed" if _uid_n > 0 else "none")
         with _qm3:
             _kf_n = int((_q_all.get("Key Failure", pd.Series(dtype=str))
                           .astype(str).str.strip()
                           .replace({"":pd.NA,"nan":pd.NA,"None":pd.NA}).notna()).sum())
-            st.metric("🔧 Key Failure filled", f"{_kf_n} rows")
+            st.metric(" Key Failure filled", f"{_kf_n} rows")
         with _qm4:
-            st.metric("💰 Spare Parts Cost", f"€ {_cost_total_q:,.2f}",
+            st.metric(" Spare Parts Cost", f"€ {_cost_total_q:,.2f}",
                       delta="recorded" if _cost_total_q > 0 else "no costs yet")
 
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -2864,13 +3076,13 @@ with tab_qual:
         _ec1, _ec2 = st.columns(2)
         with _ec1:
             st.download_button(
-                f"⬇ CSV — {_qual_n} QUALIFIED STOP(S)",
+                f"CSV  {_qual_n} QUALIFIED STOP(S)",
                 data=_q_all[_q_exp_cols].to_csv(index=False, sep=";").encode("utf-8"),
                 file_name=f"TE_qualified_stops_{_ts}.csv",
                 mime="text/csv", use_container_width=True)
         with _ec2:
-            st.info(f"📊 **{_qual_n}** qualified stop(s) · "
-                    f"Full PDF report available in **⚙ KPIs** tab · "
+            st.info(f" **{_qual_n}** qualified stop(s) · "
+                    f"Full PDF report available in ** KPIs** tab · "
                     f"Data persisted to **{PERSISTENT_CSV}**")
 
 
