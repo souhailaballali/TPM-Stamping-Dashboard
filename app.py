@@ -955,22 +955,36 @@ with st.sidebar:
         key="sidebar_uploader", label_visibility="collapsed"
     )
 
-    # ── Auto-load indicator ──
+    # ── X-click detection: uploader cleared → reset to welcome screen ──
+    # If uploader is now empty but last active source was a file upload,
+    # clear library_df and edited_df so welcome screen shows.
+    _last = st.session_state.get("last_file", "")
+    if (uploaded is None
+            and not _last.startswith("__lib__")
+            and _last not in ("__persistent__", "")
+            and st.session_state.get("library_df") is None):
+        # User just clicked X on uploader
+        st.session_state.last_file     = ""
+        st.session_state.edited_df     = None
+        st.session_state.active_period = None
+
+    # ── Persistent file status (informational only — NOT auto-loaded) ──
     if os.path.exists(PERSISTENT_CSV):
         _sz = os.path.getsize(PERSISTENT_CSV)
         _mt = datetime.fromtimestamp(os.path.getmtime(PERSISTENT_CSV))
-        st.markdown(f"""
-        <div style="background:rgba(39,174,96,0.18);border:1px solid rgba(39,174,96,0.5);
-                    border-radius:8px;padding:9px 12px;margin:10px 0 2px">
-          <div style="font-size:11px;font-weight:700;color:#4AE080;margin-bottom:2px">
-            ✅ Data loaded from last session
-          </div>
-          <div style="font-size:9px;color:rgba(240,232,223,0.6);
-                      font-family:'JetBrains Mono',monospace;letter-spacing:0.5px">
-            {_sz//1024} KB · {_mt.strftime('%d/%m/%Y %H:%M')}
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        if _sz > 512:   # only show if file has real content
+            st.markdown(f"""
+            <div style="background:rgba(255,255,255,0.05);
+                        border:1px solid rgba(240,232,223,0.15);
+                        border-radius:7px;padding:7px 11px;margin:8px 0 2px">
+              <div style="font-size:9px;color:rgba(240,232,223,0.5);
+                          font-family:'JetBrains Mono',monospace;letter-spacing:0.5px;
+                          line-height:1.7">
+                💾 Last save: {_mt.strftime('%d/%m/%Y %H:%M')}<br>
+                {_sz//1024} KB · Load from DATA LIBRARY ↓
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -978,6 +992,34 @@ with st.sidebar:
         st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                     f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
                     f'FILTERS</p>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════
+    #  📅 ACTIVE PERIOD  (computed from loaded data)
+    # ══════════════════════════════════════════════════════════════
+    _ap = st.session_state.get("active_period")
+    if _ap:
+        st.markdown(f"""
+        <div style="background:rgba(232,101,10,0.10);
+                    border:1px solid rgba(232,101,10,0.35);
+                    border-left:3px solid {TE_ORANGE};
+                    border-radius:8px;padding:10px 13px;margin-bottom:2px">
+          <div style="font-size:9px;font-weight:700;letter-spacing:2px;
+                      text-transform:uppercase;color:{TE_ORANGE};margin-bottom:5px">
+            📅 Active Period
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;
+                      color:#F0E8DF;font-weight:600;letter-spacing:0.5px">
+            {_ap[0]}
+          </div>
+          <div style="font-size:9px;color:rgba(240,232,223,0.45);
+                      font-family:'JetBrains Mono',monospace;
+                      margin:2px 0 3px;letter-spacing:1px">→</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;
+                      color:#F0E8DF;font-weight:600;letter-spacing:0.5px">
+            {_ap[1]}
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════
     #  📌 DATA LIBRARY
@@ -1355,8 +1397,8 @@ if nav_choice == "History":
 # ══════════════════════════════════════════════════════════════════════════════
 #  DATA SOURCE PRIORITY
 #  1st: file in uploader  →  read, archive, save to persistent
-#  2nd: library_df loaded via selectbox
-#  3rd: tpm_data_persistent.csv (auto-load on refresh)
+#  2nd: library_df explicitly loaded by user via selectbox + LOAD button
+#  → NO auto-load from persistent. Welcome screen until user acts.
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── Resolve which source is active ───────────────────────────────────────────
@@ -1365,13 +1407,21 @@ if uploaded is not None:
     _src = "upload"
 elif st.session_state.get("library_df") is not None:
     _src = "library"
-elif os.path.exists(PERSISTENT_CSV):
-    _p = load_persistent()
-    if not _p.empty:
-        _src = "persistent"
+# NOTE: persistent CSV is intentionally NOT an auto-source.
+# The user must explicitly upload a file or load from DATA LIBRARY.
 
 # ── If nothing available → show welcome screen ───────────────────────────────
 if _src == "none":
+    _n_arch = len(list_archive())
+    _arch_hint = (
+        f'<div style="background:#FFF8F0;border:1.5px solid #FAC98A;'
+        f'border-radius:8px;padding:10px 16px;margin-top:12px;'
+        f'font-size:12px;color:#7A4A20;text-align:center">'
+        f'📌 <strong>{_n_arch}</strong> saved session{"s" if _n_arch != 1 else ""} available'
+        f' in the DATA LIBRARY — select one below to restore it.'
+        f'</div>'
+    ) if _n_arch > 0 else ""
+
     st.markdown(f"""
     <div style="display:flex;justify-content:center;align-items:center;
                 min-height:60vh;margin-top:20px">
@@ -1398,7 +1448,7 @@ if _src == "none":
             Import your Hydra MES file or load from<br>
             <strong style="color:{TE_ORANGE}">📌 DATA LIBRARY</strong> in the sidebar.<br>
             <span style="font-size:11px;color:{TE_ORANGE};font-weight:600">
-                ↑ Use the sidebar to import or restore data
+                ↑ Use the sidebar to get started
             </span>
         </div>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
@@ -1412,6 +1462,7 @@ if _src == "none":
                          font-size:11px;font-weight:700;border-radius:20px;
                          padding:5px 14px">.xlsx</span>
         </div>
+        {_arch_hint}
     </div></div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -1426,7 +1477,7 @@ if _src == "upload":
     if _is_new_file:
         _df_new = load_data(uploaded)
         if not _df_new.empty and len(_df_new.columns) >= 2:
-            # ✅ Parse succeeded
+            # ✅ Parse succeeded — archive + persist immediately
             _arc_name = archive_import(_df_new)
             if _arc_name:
                 st.session_state["_archive_saved"] = _arc_name
@@ -1437,27 +1488,17 @@ if _src == "upload":
             st.session_state.edited_df      = None
             df_raw = _df_new.copy()
         else:
-            # ⚠️ Parse failed — silently fall back to persistent, show soft warning
-            _fb = load_persistent()
-            if not _fb.empty:
-                st.warning(
-                    f"⚠️ Could not read **{uploaded.name}** (format issue). "
-                    f"Showing last saved session instead.",
-                    icon="⚠️"
-                )
-                df_raw = _fb
-                _src = "persistent"
-            else:
-                st.error(
-                    f"❌ Cannot read **{uploaded.name}**. "
-                    "Please check the file format (CSV comma/semicolon or XLSX)."
-                )
-                st.stop()
+            # ⚠️ Parse failed — show error, stay on welcome
+            st.error(
+                f"❌ Cannot read **{uploaded.name}**. "
+                "Please check the file format (CSV comma/semicolon or XLSX)."
+            )
+            st.stop()
     else:
         df_raw = load_data(uploaded)    # uses cached bytes — instant
 
 elif _src == "library":
-    # ── Priority 2: Library selectbox ────────────────────────────
+    # ── Priority 2: Library (explicit user action only) ──────────
     df_raw = st.session_state.library_df.copy()
     _lib_key = f"__lib__{st.session_state.get('library_active','')}"
     if st.session_state.get("last_file") != _lib_key:
@@ -1465,12 +1506,8 @@ elif _src == "library":
         st.session_state.edited_df = None
 
 else:
-    # ── Priority 3: Persistent CSV (auto-load on page refresh) ────
-    df_raw = load_persistent()
-    _pers_key = "__persistent__"
-    if st.session_state.get("last_file") != _pers_key:
-        st.session_state.last_file = _pers_key
-        st.session_state.edited_df = None
+    # Should not reach here — welcome screen already stopped execution
+    st.stop()
 
 df_raw = df_raw.loc[:, ~df_raw.columns.duplicated()]
 
@@ -1549,6 +1586,13 @@ if COL_DATE in df_raw.columns:
     df_raw["date_only"] = df_raw[COL_DATE].dt.normalize()
     if df_raw["date_only"].notna().sum() == 0:
         st.warning(f" Column `{COL_DATE}`: no valid date parsed.")
+    else:
+        # ── Store active period so sidebar can display it ──
+        _valid_dates = df_raw["date_only"].dropna()
+        st.session_state["active_period"] = (
+            _valid_dates.min().strftime("%d/%m/%Y"),
+            _valid_dates.max().strftime("%d/%m/%Y"),
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
