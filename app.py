@@ -38,7 +38,42 @@ st.set_page_config(
 #  PERSISTENT STORAGE PATH
 # ──────────────────────────────────────────────────────────────────────────────
 PERSISTENT_CSV = "tpm_data_persistent.csv"
-ARCHIVE_DIR    = "data_archive"        # auto-archive on every new import
+BACKUP_DIR     = "saved_sessions"
+os.makedirs(BACKUP_DIR, exist_ok=True)
+
+
+def list_saved_sessions() -> list:
+    """Return [(fname, label, mtime, fpath)] sorted newest first."""
+    sessions = []
+    if os.path.isdir(BACKUP_DIR):
+        for fname in os.listdir(BACKUP_DIR):
+            if fname.endswith(".csv") and fname.startswith("backup_"):
+                fpath = os.path.join(BACKUP_DIR, fname)
+                try:
+                    mtime  = os.path.getmtime(fpath)
+                    fsize  = os.path.getsize(fpath)
+                    # Pretty label: "DATA 10-03-2025 — 26-03-2026"
+                    # We store creation range in filename as backup_DD_MM_YYYY.csv
+                    # Display as "DATA <date>" based on mtime
+                    dt_lbl = datetime.fromtimestamp(mtime).strftime("%d/%m/%Y")
+                    sz_kb  = fsize // 1024
+                    label  = f"DATA  {dt_lbl}"
+                    sessions.append((fname, label, mtime, fpath, sz_kb))
+                except Exception:
+                    pass
+    sessions.sort(key=lambda x: x[2], reverse=True)
+    return sessions
+
+
+def save_session_backup(df_to_save: pd.DataFrame):
+    """Create / overwrite today's backup file."""
+    tag  = datetime.now().strftime("%d_%m_%Y")
+    path = os.path.join(BACKUP_DIR, f"backup_{tag}.csv")
+    try:
+        df_to_save.to_csv(path, index=False, encoding="utf-8")
+    except Exception:
+        pass
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  COLONNES SOURCE (noms exacts du fichier Hydra)
@@ -76,30 +111,81 @@ PALETTE = [TE_ORANGE, TE_NAVY, TE_RED, "#8E44AD", TE_GREEN, "#16A085", "#D4AC0D"
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
-/* ══════════════════════════════════════════════════
-   ANTI-DARK MODE — Force Light Mode unconditionally
-   ══════════════════════════════════════════════════ */
+/* ── Adaptive Light/Dark Mode ── */
 :root {{
-    color-scheme: light only !important;
-}}
-html, body, .stApp, [data-testid="stAppViewContainer"],
-[data-testid="stMain"], [data-testid="block-container"] {{
-    background-color: {TE_BG} !important;
-    font-family: 'Barlow', sans-serif;
-    color-scheme: light !important;
+    --te-bg:      {TE_BG};
+    --te-white:   {TE_WHITE};
+    --te-text:    #3E2010;
+    --te-card-bg: {TE_WHITE};
+    --te-border:  #EDE0D4;
+    --te-subtext: #7A6050;
+    --te-input-bg:{TE_WHITE};
+    --te-input-fg:#5D4037;
+    --te-chart-bg:#FFFFFF;
 }}
 @media (prefers-color-scheme: dark) {{
-    html, body, .stApp {{ background-color: {TE_BG} !important; }}
-    [data-testid="stMain"], [data-testid="block-container"] {{
-        background-color: {TE_BG} !important;
+    :root {{
+        --te-bg:      #1A1210;
+        --te-white:   #242018;
+        --te-text:    #F0E8DF;
+        --te-card-bg: #2A1E16;
+        --te-border:  #4A3020;
+        --te-subtext: #B8967A;
+        --te-input-bg:#2C1A0E;
+        --te-input-fg:#F0D0A0;
+        --te-chart-bg:#1E1610;
     }}
-    input, textarea, select {{ background: white !important; color: #1C1C1C !important; }}
 }}
 
-#MainMenu, footer {{ visibility: hidden; }}
-header[data-testid="stHeader"] {{ background: transparent !important; }}
+html, body, .stApp {{
+    background-color: var(--te-bg) !important;
+    color: var(--te-text) !important;
+    font-family: 'Barlow', sans-serif;
+}}
+#MainMenu, footer, header {{ visibility: hidden; }}
 .block-container {{ padding-top: 0 !important; max-width: 100% !important; }}
+
+/* Main text adapts */
+.stApp p, .stApp span:not([data-testid]),
+.stApp div:not([data-testid]), .stApp label {{
+    color: var(--te-text);
+}}
+
+/* White cards in main area */
+.chart-card {{
+    background: var(--te-card-bg) !important;
+    border-color: var(--te-border) !important;
+}}
+.te-statusbar {{
+    background: var(--te-card-bg) !important;
+    border-color: var(--te-border) !important;
+    color: var(--te-subtext) !important;
+}}
+
+/* Inputs adapt */
+.stApp [data-testid="stTextInput"] input,
+.stApp [data-testid="stNumberInput"] input,
+.stApp textarea,
+.stApp [data-testid="stSelectbox"] > div > div {{
+    background: var(--te-input-bg) !important;
+    color: var(--te-input-fg) !important;
+    border-color: var(--te-border) !important;
+}}
+.stApp [data-testid="stSelectbox"] span {{
+    color: var(--te-input-fg) !important;
+}}
+/* Radio labels adapt */
+.stApp [data-testid="stRadio"] label,
+.stApp [data-testid="stRadio"] p,
+.stApp [data-testid="stWidgetLabel"] p {{
+    color: var(--te-text) !important;
+}}
+/* Plotly chart containers */
+.js-plotly-plot .plotly {{
+    background: var(--te-chart-bg) !important;
+}}
 
 [data-testid="stSidebar"] {{
     background: linear-gradient(180deg, {TE_BLACK} 0%, #2A1A0A 100%) !important;
@@ -109,20 +195,6 @@ header[data-testid="stHeader"] {{ background: transparent !important; }}
 [data-testid="stSidebar"] * {{
     color: #F0E8DF !important;
     font-family: 'Barlow', sans-serif !important;
-}}
-/* Restore the collapse button so it stays clickable and visible */
-[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {{
-    background: transparent !important;
-}}
-[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button {{
-    color: {TE_ORANGE} !important;
-    background: transparent !important;
-    opacity: 1 !important;
-}}
-[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button svg {{
-    color: {TE_ORANGE} !important;
-    fill: {TE_ORANGE} !important;
-    stroke: {TE_ORANGE} !important;
 }}
 [data-testid="stSidebar"] > div:first-child {{ padding: 18px 16px !important; }}
 [data-testid="stSidebar"] hr {{ border-color: #3D2A18 !important; }}
@@ -218,9 +290,9 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] small {
 
 .te-statusbar {{
     display: flex; align-items: center; gap: 18px;
-    background: {TE_WHITE}; border: 1px solid #EDE0D4; border-radius: 10px;
+    background: var(--te-card-bg); border: 1px solid var(--te-border); border-radius: 10px;
     padding: 10px 20px; margin-bottom: 20px;
-    font-size: 13px; color: #7A6050; flex-wrap: wrap;
+    font-size: 13px; color: var(--te-subtext); flex-wrap: wrap;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }}
 .te-statusbar strong {{ color: {TE_BLACK}; font-weight: 600; }}
@@ -280,10 +352,10 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] small {
 }}
 
 .chart-card {{
-    background: {TE_WHITE}; border-radius: 12px;
+    background: var(--te-card-bg); border-radius: 12px;
     padding: 18px 18px 8px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-    border: 1px solid #EDE0D4; margin-bottom: 18px;
+    border: 1px solid var(--te-border); margin-bottom: 18px;
 }}
 .chart-header {{
     display: flex; align-items: center; gap: 10px;
@@ -409,97 +481,175 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] small {
     border-radius: 10px !important; overflow: hidden !important;
 }}
 
+/* ── DATA LIBRARY LOAD buttons ── */
+[data-testid="stSidebar"] [data-testid="stButton"][class*="load_sess_"] > button,
+[key*="load_sess_"] button {{
+    background: linear-gradient(135deg, {TE_ORANGE} 0%, {TE_DARK} 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 15px !important;
+    font-weight: 900 !important;
+    letter-spacing: 3px !important;
+    text-transform: uppercase !important;
+    padding: 12px 20px !important;
+    width: 100% !important;
+    height: 48px !important;
+    margin-bottom: 10px !important;
+    box-shadow: 0 4px 16px rgba(232,101,10,0.45) !important;
+    transition: all 0.2s ease !important;
+}}
+[data-testid="stSidebar"] [data-testid="stButton"][class*="load_sess_"] > button:hover {{
+    background: linear-gradient(135deg, {TE_ORANGE3} 0%, {TE_ORANGE} 100%) !important;
+    box-shadow: 0 6px 22px rgba(232,101,10,0.65) !important;
+    transform: translateY(-1px) !important;
+}}
+
 ::-webkit-scrollbar {{ width: 5px; height: 5px; }}
 ::-webkit-scrollbar-track {{ background: #F0EAE3; }}
 ::-webkit-scrollbar-thumb {{ background: {TE_ORANGE3}; border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {TE_ORANGE}; }}
 
 /* ══════════════════════════════════════════════════════
-   INPUT FIELDS — Force dark brown text on white bg
-   Fixes: selectbox, date_input, text_input placeholders
+   FIX 1 — "Period" date input label in sidebar
+   Remove white bg, match NAVIGATION/MACHINES label style
    ══════════════════════════════════════════════════════ */
-
-/* Selectbox — selected value + placeholder */
-[data-baseweb="select"] div,
-[data-baseweb="select"] span,
-[data-baseweb="select"] input,
-[data-baseweb="select"] [data-testid="stMarkdownContainer"] {{
-    color: #5D4037 !important;
-}}
-/* Selectbox trigger button text */
-[data-baseweb="select"] > div > div {{
-    color: #5D4037 !important;
-    background-color: white !important;
-}}
-/* Selectbox placeholder specifically */
-[data-baseweb="select"] [data-testid="stSelectbox"] span,
-[data-baseweb="select"] [aria-disabled="false"] span {{
-    color: #5D4037 !important;
-    opacity: 1 !important;
-}}
-/* Dropdown menu options */
-[data-baseweb="popover"] li,
-[data-baseweb="popover"] [role="option"],
-[data-baseweb="menu"] li {{
-    color: #5D4037 !important;
-    background-color: white !important;
-}}
-[data-baseweb="popover"] li:hover,
-[data-baseweb="menu"] li:hover {{
-    background-color: #FFF0E6 !important;
+[data-testid="stSidebar"] [data-testid="stDateInput"] > label,
+[data-testid="stSidebar"] [data-testid="stDateInput"] > div > label,
+[data-testid="stSidebar"] [data-baseweb="form-control"] > div:first-child,
+[data-testid="stSidebar"] label[for*="date"],
+[data-testid="stSidebar"] .stDateInput label p {{
+    background: transparent !important;
+    background-color: transparent !important;
     color: {TE_ORANGE} !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    letter-spacing: 3px !important;
+    text-transform: uppercase !important;
+    padding: 0 !important;
+    margin-bottom: 6px !important;
+    border: none !important;
+    box-shadow: none !important;
 }}
-
-/* Date input — selected date text */
-[data-testid="stDateInput"] input,
-[data-testid="stDateInput"] div,
-[data-testid="stDateInput"] span {{
-    color: #5D4037 !important;
-    background-color: white !important;
+/* Also target the generic widget label in sidebar */
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] {{
+    background: transparent !important;
+    background-color: transparent !important;
 }}
-/* Date input placeholder */
-[data-testid="stDateInput"] input::placeholder {{
-    color: #9A7A60 !important;
-    opacity: 1 !important;
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{
+    background: transparent !important;
+    color: {TE_ORANGE} !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    letter-spacing: 3px !important;
+    text-transform: uppercase !important;
 }}
-
-/* Text input */
-[data-testid="stTextInput"] input,
-[data-testid="stTextInput"] textarea {{
-    color: #5D4037 !important;
-    background-color: white !important;
-}}
-[data-testid="stTextInput"] input::placeholder {{
-    color: #9A7A60 !important;
-    opacity: 1 !important;
-}}
-
-/* Number input */
-[data-testid="stNumberInput"] input {{
-    color: #5D4037 !important;
-    background-color: white !important;
-}}
-
-/* Multiselect — tags and placeholder */
-[data-testid="stMultiSelect"] [data-baseweb="input"] input,
-[data-testid="stMultiSelect"] [data-baseweb="input"] span {{
-    color: #5D4037 !important;
-}}
-/* Multiselect tags in main area (not sidebar) */
-.stApp [data-testid="stMultiSelect"] span[data-baseweb="tag"] span {{
-    color: white !important;
-}}
-
-/* Generic baseweb input */
-[data-baseweb="input"] input,
-[data-baseweb="textarea"] textarea {{
-    color: #5D4037 !important;
+/* Date input box — white bg, dark brown text, orange border */
+[data-testid="stSidebar"] [data-testid="stDateInput"] input,
+[data-testid="stSidebar"] [data-baseweb="input"] input {{
     background: white !important;
+    color: #5D4037 !important;
+    border: 1.5px solid {TE_ORANGE} !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
 }}
-[data-baseweb="input"] input::placeholder,
-[data-baseweb="textarea"] textarea::placeholder {{
-    color: #9A7A60 !important;
-    opacity: 1 !important;
+
+/* ══════════════════════════════════════════════════════
+   FIX 2 — Navigation radio: large clickable boxes, orange on select/hover
+   ══════════════════════════════════════════════════════ */
+/* Hide default radio circles */
+[data-testid="stSidebar"] [data-testid="stRadio"] [data-baseweb="radio"] > div:first-child {{
+    display: none !important;
+}}
+/* Each radio label becomes a full-width button box */
+[data-testid="stSidebar"] [data-testid="stRadio"] label {{
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    padding: 12px 16px !important;
+    margin: 4px 0 !important;
+    border-radius: 10px !important;
+    border: 1.5px solid rgba(232,101,10,0.3) !important;
+    background: rgba(255,255,255,0.04) !important;
+    cursor: pointer !important;
+    transition: all 0.18s ease !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    color: #F0D8C0 !important;
+    text-align: center !important;
+}}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
+    background: rgba(232,101,10,0.18) !important;
+    border-color: {TE_ORANGE} !important;
+    color: {TE_ORANGE} !important;
+    transform: translateX(2px) !important;
+    box-shadow: 0 3px 12px rgba(232,101,10,0.25) !important;
+}}
+/* Selected option — orange background */
+[data-testid="stSidebar"] [data-testid="stRadio"] [aria-checked="true"] label,
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {{
+    background: linear-gradient(135deg, {TE_ORANGE} 0%, {TE_DARK} 100%) !important;
+    border-color: {TE_ORANGE3} !important;
+    color: white !important;
+    font-weight: 800 !important;
+    box-shadow: 0 4px 16px rgba(232,101,10,0.4) !important;
+}}
+/* The text span inside the label */
+[data-testid="stSidebar"] [data-testid="stRadio"] label p,
+[data-testid="stSidebar"] [data-testid="stRadio"] label span {{
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+}}
+
+/* ══════════════════════════════════════════════════════
+   FIX 3 — Data Library: remove DEL button column trick,
+            replace with small trash icon button
+            Also style the selectbox text dark brown
+   ══════════════════════════════════════════════════════ */
+/* Library selectbox value text */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] span[class*="singleValue"],
+[data-testid="stSidebar"] [data-testid="stSelectbox"] div[class*="placeholder"],
+[data-testid="stSidebar"] [data-testid="stSelectbox"] div[class*="ValueContainer"] > div {{
+    color: #5D4037 !important;
+    font-weight: 600 !important;
+}}
+/* Delete button in Data Library — small, square, red icon style */
+[data-testid="stSidebar"] [data-testid="stButton"][data-key="btn_del_archive"] > button,
+[data-testid="stSidebar"] .del-btn-wrap > div > button {{
+    background: rgba(192,57,43,0.15) !important;
+    color: {TE_RED} !important;
+    border: 1px solid rgba(192,57,43,0.4) !important;
+    border-radius: 8px !important;
+    font-family: 'Material Icons' !important;
+    font-size: 18px !important;
+    padding: 6px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    width: 36px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    font-weight: 400 !important;
+    box-shadow: none !important;
+    transition: all 0.18s ease !important;
+}}
+[data-testid="stSidebar"] [data-testid="stButton"][data-key="btn_del_archive"] > button:hover {{
+    background: rgba(192,57,43,0.30) !important;
+    border-color: {TE_RED} !important;
+    box-shadow: 0 2px 10px rgba(192,57,43,0.3) !important;
 }}
 
 /* ── Sidebar toggle button — inside sidebar ── */
@@ -526,34 +676,54 @@ section[data-testid="stSidebar"] div[data-testid="stFileUploadDropzone"] small {
     transform: translateY(-1px) !important;
 }}
 
-/* ── Sidebar toggle — native buttons, minimal styling only ── */
-[data-testid="collapsedControl"] button svg {{
-    color: {TE_ORANGE} !important; fill: {TE_ORANGE} !important;
+/* ── Floating "Show Sidebar" tab — fixed on left edge when sidebar is hidden ── */
+.sidebar-show-float {{
+    position: fixed !important;
+    top: 50% !important;
+    left: 0px !important;
+    transform: translateY(-50%) !important;
+    z-index: 99999 !important;
+    writing-mode: vertical-rl !important;
+    text-orientation: mixed !important;
 }}
-[data-testid="stSidebarCollapseButton"] button svg {{
-    color: {TE_ORANGE} !important; fill: {TE_ORANGE} !important;
-}}
-/* ── Custom HIDE button inside sidebar ── */
-[data-testid="stSidebar"] .te-hide-btn button {{
-    background: linear-gradient(135deg, {TE_ORANGE} 0%, {TE_DARK} 100%) !important;
+.sidebar-show-float button {{
+    background: linear-gradient(180deg, {TE_ORANGE} 0%, {TE_DARK} 100%) !important;
     color: white !important;
     border: none !important;
-    border-radius: 8px !important;
+    border-radius: 0 8px 8px 0 !important;
     font-family: 'Barlow Condensed', sans-serif !important;
     font-size: 13px !important;
     font-weight: 800 !important;
     letter-spacing: 2px !important;
     text-transform: uppercase !important;
-    width: 100% !important;
-    padding: 10px 16px !important;
-    box-shadow: 0 3px 12px rgba(232,101,10,0.4) !important;
-    transition: all 0.2s ease !important;
+    padding: 20px 10px !important;
+    width: 36px !important;
+    min-height: 120px !important;
     cursor: pointer !important;
+    box-shadow: 4px 0 16px rgba(232,101,10,0.5) !important;
+    transition: all 0.2s ease !important;
+    writing-mode: vertical-lr !important;
 }}
-[data-testid="stSidebar"] .te-hide-btn button:hover {{
-    background: linear-gradient(135deg, {TE_ORANGE3} 0%, {TE_ORANGE} 100%) !important;
-    box-shadow: 0 5px 20px rgba(232,101,10,0.65) !important;
-    transform: translateY(-1px) !important;
+.sidebar-show-float button:hover {{
+    background: linear-gradient(180deg, {TE_ORANGE3} 0%, {TE_ORANGE} 100%) !important;
+    width: 44px !important;
+    box-shadow: 6px 0 24px rgba(232,101,10,0.7) !important;
+}}
+
+/* ── "Show Sidebar" button in main content (fallback) ── */
+[data-testid="stButton"].show-sidebar-main > button {{
+    background: linear-gradient(135deg, {TE_ORANGE}, {TE_DARK}) !important;
+    color: white !important;
+    border: 2px solid {TE_ORANGE3} !important;
+    border-radius: 0 10px 10px 0 !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    letter-spacing: 1.5px !important;
+    text-transform: uppercase !important;
+    padding: 14px 18px !important;
+    box-shadow: 4px 0 18px rgba(232,101,10,0.5) !important;
+    min-height: 56px !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -604,61 +774,10 @@ def load_persistent() -> pd.DataFrame:
 
 
 def save_persistent(df_to_save: pd.DataFrame):
-    """Save main persistent CSV (overwrite). No backup copy on save."""
     try:
         df_to_save.to_csv(PERSISTENT_CSV, index=False, encoding="utf-8")
     except Exception as e:
         st.error(f" Could not save to disk: {e}")
-
-
-def archive_import(df_source: pd.DataFrame):
-    """
-    On every new file import, save a copy to data_archive/ named:
-    'DATA [DateMin] - [DateMax].csv'
-    using the min/max of plant_shift_date column.
-    """
-    try:
-        os.makedirs(ARCHIVE_DIR, exist_ok=True)
-        # Extract date range
-        if COL_DATE in df_source.columns:
-            _dates = pd.to_datetime(df_source[COL_DATE], errors="coerce").dropna()
-            if len(_dates):
-                d_min = _dates.min().strftime("%d-%m-%Y")
-                d_max = _dates.max().strftime("%d-%m-%Y")
-            else:
-                d_min = d_max = datetime.now().strftime("%d-%m-%Y")
-        else:
-            d_min = d_max = datetime.now().strftime("%d-%m-%Y")
-        fname = f"DATA {d_min} - {d_max}.csv"
-        fpath = os.path.join(ARCHIVE_DIR, fname)
-        df_source.to_csv(fpath, index=False, encoding="utf-8")
-        return fname
-    except Exception:
-        return None
-
-
-def list_archive() -> list:
-    """
-    Return list of (display_label, filepath) from data_archive/, newest first.
-    Label = filename without .csv extension.
-    """
-    if not os.path.exists(ARCHIVE_DIR):
-        return []
-    files = sorted(
-        [f for f in os.listdir(ARCHIVE_DIR) if f.endswith(".csv")],
-        reverse=True
-    )
-    return [(f.replace(".csv", ""), os.path.join(ARCHIVE_DIR, f)) for f in files]
-
-
-def load_archive(filepath: str) -> pd.DataFrame:
-    try:
-        df_b = pd.read_csv(filepath, low_memory=False)
-        df_b.columns = [str(c).strip() for c in df_b.columns]
-        return df_b
-    except Exception as e:
-        st.error(f"Cannot load archive file: {e}")
-        return pd.DataFrame()
 
 
 def merge_qualifications(df_new: pd.DataFrame,
@@ -703,80 +822,19 @@ def merge_qualifications(df_new: pd.DataFrame,
 # ──────────────────────────────────────────────────────────────────────────────
 
 def load_data(f) -> pd.DataFrame:
-    """
-    Ultra-robust file reader.
-    - Accepts UploadedFile or a file-path string.
-    - Bytes are cached in session_state to prevent double-read errors.
-    - Tries multiple CSV strategies (sep=None auto-detect, then ;, then ,).
-    - Never raises: returns empty DataFrame on any failure.
-    """
-    # ── File path (string) — for archive/library loads ─────────────
-    if isinstance(f, str):
-        try:
-            if f.lower().endswith((".xlsx", ".xls")):
-                df = pd.read_excel(f)
-            else:
-                # Try auto-detect first, then fallbacks
-                try:
-                    df = pd.read_csv(f, sep=None, engine="python",
-                                     on_bad_lines="skip", low_memory=False)
-                except Exception:
-                    try:
-                        df = pd.read_csv(f, sep=";", on_bad_lines="skip", low_memory=False)
-                    except Exception:
-                        df = pd.read_csv(f, sep=",", on_bad_lines="skip", low_memory=False)
-            df.columns = [str(c).strip() for c in df.columns]
-            return df if not df.empty else pd.DataFrame()
-        except Exception:
-            return pd.DataFrame()
-
-    # ── UploadedFile — read bytes ONCE, cache to survive reruns ────
-    cache_key = f"_raw_{f.name}_{f.size}"
-    if cache_key not in st.session_state:
-        try:
-            raw = f.read()
-            st.session_state[cache_key] = raw
-        except Exception:
-            return pd.DataFrame()
-
-    raw = st.session_state.get(cache_key, b"")
-    if not raw:
-        return pd.DataFrame()
-
     name = f.name.lower()
     try:
-        if name.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(io.BytesIO(raw))
-            df.columns = [str(c).strip() for c in df.columns]
-            return df if len(df.columns) > 0 else pd.DataFrame()
-
-        # CSV: try sep=None (auto), then ;, then ,
-        for _sep, _eng in [(None, "python"), (";", "c"), (",", "c")]:
-            try:
-                _kwargs = dict(on_bad_lines="skip", low_memory=False)
-                if _sep is None:
-                    _kwargs["sep"]    = None
-                    _kwargs["engine"] = "python"
-                else:
-                    _kwargs["sep"] = _sep
-                df = pd.read_csv(io.BytesIO(raw), **_kwargs)
-                df.columns = [str(c).strip() for c in df.columns]
-                # Accept if we got at least 2 columns (not a single-col parse failure)
-                if len(df.columns) >= 2:
-                    return df
-            except Exception:
-                continue
-        # Last resort: try with utf-8-sig encoding (BOM)
-        try:
-            df = pd.read_csv(io.BytesIO(raw), sep=None, engine="python",
-                             encoding="utf-8-sig", on_bad_lines="skip")
-            df.columns = [str(c).strip() for c in df.columns]
-            if len(df.columns) >= 2:
-                return df
-        except Exception:
-            pass
-        return pd.DataFrame()
-    except Exception:
+        if name.endswith(".csv"):
+            raw = f.read()
+            sample = raw[:2048].decode("utf-8", errors="replace")
+            sep = ";" if sample.count(";") >= sample.count(",") else ","
+            df = pd.read_csv(io.BytesIO(raw), sep=sep, encoding="utf-8", on_bad_lines="skip")
+        else:
+            df = pd.read_excel(f)
+        df.columns = [str(c).strip() for c in df.columns]
+        return df
+    except Exception as e:
+        st.error(f" File read error : `{e}`")
         return pd.DataFrame()
 
 
@@ -888,20 +946,17 @@ def export_excel(df: pd.DataFrame, kpi: dict) -> bytes:
 #  PLOTLY BASE LAYOUT
 # ──────────────────────────────────────────────────────────────────────────────
 PL = dict(
-    plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
     font=dict(family="Barlow, sans-serif", color="#4A3020", size=11),
     margin=dict(l=20, r=20, t=40, b=20),
     xaxis=dict(gridcolor="#F0E8E0", showgrid=True, zeroline=False,
-               linecolor="#EDE0D4", tickfont=dict(size=10, color="#9A7A60"),
-               color="#4A3020"),
+               linecolor="#EDE0D4", tickfont=dict(size=10, color="#9A7A60")),
     yaxis=dict(gridcolor="#F0E8E0", showgrid=True, zeroline=False,
-               linecolor="#EDE0D4", tickfont=dict(size=10, color="#9A7A60"),
-               color="#4A3020"),
-    legend=dict(bgcolor="#FFFFFF", bordercolor="#EDE0D4", borderwidth=1,
-                font=dict(size=11, color="#4A3020")),
+               linecolor="#EDE0D4", tickfont=dict(size=10, color="#9A7A60")),
+    legend=dict(bgcolor=TE_WHITE, bordercolor="#EDE0D4", borderwidth=1,
+                font=dict(size=11)),
     hoverlabel=dict(bgcolor=TE_BLACK, bordercolor=TE_BLACK,
                     font=dict(color="white", family="JetBrains Mono", size=11)),
-    template="plotly_white",
 )
 PCONF = dict(displayModeBar=False, responsive=True)
 
@@ -918,9 +973,66 @@ def _hex_to_rgba(hex_color: str, alpha: float = 0.1) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+#  SIDEBAR STATE INIT
+# ──────────────────────────────────────────────────────────────────────────────
+if "sidebar_open" not in st.session_state:
+    st.session_state.sidebar_open = True
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  SIDEBAR VISIBILITY STATE
+# ──────────────────────────────────────────────────────────────────────────────
+if not st.session_state.get("sidebar_open", True):
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"] {
+        width: 0px !important;
+        min-width: 0px !important;
+        max-width: 0px !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        border: none !important;
+        visibility: hidden !important;
+    }
+    [data-testid="stSidebar"] > div { display: none !important; }
+    .block-container { padding-left: 1rem !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ──────────────────────────────────────────────────────────────────────────────
 #  SIDEBAR
 # ──────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
+    # ── Hide sidebar button — slim strip at very top ──
+    st.markdown(f"""
+    <style>
+    [data-testid="stSidebar"] .hide-btn-wrap > div[data-testid="stButton"] > button {{
+        background: rgba(255,255,255,0.06) !important;
+        color: rgba(240,232,223,0.55) !important;
+        border: 1px solid rgba(232,101,10,0.25) !important;
+        border-radius: 6px !important;
+        font-family: 'Barlow Condensed', sans-serif !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 2px !important;
+        text-transform: uppercase !important;
+        padding: 5px 10px !important;
+        height: 28px !important;
+        width: 100% !important;
+        text-align: right !important;
+        transition: all 0.2s ease !important;
+    }}
+    [data-testid="stSidebar"] .hide-btn-wrap > div[data-testid="stButton"] > button:hover {{
+        background: rgba(232,101,10,0.18) !important;
+        color: {TE_ORANGE} !important;
+        border-color: rgba(232,101,10,0.6) !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="hide-btn-wrap">', unsafe_allow_html=True)
+    if st.button("Hide  <<", key="btn_hide_sidebar", use_container_width=True):
+        st.session_state.sidebar_open = False
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(f"""
     <div style="background:rgba(232,101,10,0.12);border:1px solid rgba(232,101,10,0.35);
@@ -931,60 +1043,30 @@ with st.sidebar:
         </div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:7px;
                     letter-spacing:2px;color:rgba(255,255,255,0.4);margin-top:4px">
-            STAMPING CMMS · TANGIER
+            STAMPING CMMS
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Navigation ──
     st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                 f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
                 f'NAVIGATION</p>', unsafe_allow_html=True)
     nav_choice = st.radio(
-        "", options=["Dashboard", "History"],
+        "",
+        options=["Dashboard", "History"],
         index=0, key="nav_radio", label_visibility="collapsed"
     )
+
     st.markdown("---")
 
-    # ── Import Data ──
     st.markdown(f'<p style="font-size:9px;font-weight:700;letter-spacing:3px;'
                 f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
                 f'IMPORT DATA</p>', unsafe_allow_html=True)
+
     uploaded = st.file_uploader(
         "", type=["csv", "xlsx", "xls"],
         key="sidebar_uploader", label_visibility="collapsed"
     )
-
-    # ── X-click detection: uploader cleared → reset to welcome screen ──
-    # If uploader is now empty but last active source was a file upload,
-    # clear library_df and edited_df so welcome screen shows.
-    _last = st.session_state.get("last_file", "")
-    if (uploaded is None
-            and not _last.startswith("__lib__")
-            and _last not in ("__persistent__", "")
-            and st.session_state.get("library_df") is None):
-        # User just clicked X on uploader
-        st.session_state.last_file     = ""
-        st.session_state.edited_df     = None
-        st.session_state.active_period = None
-
-    # ── Persistent file status (informational only — NOT auto-loaded) ──
-    if os.path.exists(PERSISTENT_CSV):
-        _sz = os.path.getsize(PERSISTENT_CSV)
-        _mt = datetime.fromtimestamp(os.path.getmtime(PERSISTENT_CSV))
-        if _sz > 512:   # only show if file has real content
-            st.markdown(f"""
-            <div style="background:rgba(255,255,255,0.05);
-                        border:1px solid rgba(240,232,223,0.15);
-                        border-radius:7px;padding:7px 11px;margin:8px 0 2px">
-              <div style="font-size:9px;color:rgba(240,232,223,0.5);
-                          font-family:'JetBrains Mono',monospace;letter-spacing:0.5px;
-                          line-height:1.7">
-                💾 Last save: {_mt.strftime('%d/%m/%Y %H:%M')}<br>
-                {_sz//1024} KB · Load from DATA LIBRARY ↓
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -993,108 +1075,126 @@ with st.sidebar:
                     f'text-transform:uppercase;color:{TE_ORANGE};margin-bottom:6px">'
                     f'FILTERS</p>', unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════════
-    #  📅 ACTIVE PERIOD  (computed from loaded data)
-    # ══════════════════════════════════════════════════════════════
-    _ap = st.session_state.get("active_period")
-    if _ap:
-        st.markdown(f"""
-        <div style="background:rgba(232,101,10,0.10);
-                    border:1px solid rgba(232,101,10,0.35);
-                    border-left:3px solid {TE_ORANGE};
-                    border-radius:8px;padding:10px 13px;margin-bottom:2px">
-          <div style="font-size:9px;font-weight:700;letter-spacing:2px;
-                      text-transform:uppercase;color:{TE_ORANGE};margin-bottom:5px">
-            📅 Active Period
-          </div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;
-                      color:#F0E8DF;font-weight:600;letter-spacing:0.5px">
-            {_ap[0]}
-          </div>
-          <div style="font-size:9px;color:rgba(240,232,223,0.45);
-                      font-family:'JetBrains Mono',monospace;
-                      margin:2px 0 3px;letter-spacing:1px">→</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;
-                      color:#F0E8DF;font-weight:600;letter-spacing:0.5px">
-            {_ap[1]}
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # ══════════════════════════════════════════════════════════════
-    #  📌 DATA LIBRARY
-    # ══════════════════════════════════════════════════════════════
-    _archive_files = list_archive()
-    if _archive_files:
+    # ── DATA LIBRARY — saved sessions ──
+    _sessions = list_saved_sessions()
+    if _sessions:
         st.markdown("---")
         st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:14px">📌</span>
-          <span style="font-size:9px;font-weight:700;letter-spacing:3px;
-                       text-transform:uppercase;color:{TE_ORANGE}">DATA LIBRARY</span>
-          <span style="font-size:9px;color:rgba(240,232,223,0.4);
-                       font-family:'JetBrains Mono',monospace">
-            ({len(_archive_files)} session{"s" if len(_archive_files)>1 else ""})
-          </span>
-        </div>
+        <p style="font-size:9px;font-weight:700;letter-spacing:3px;
+                  text-transform:uppercase;color:{TE_ORANGE};
+                  margin-bottom:8px;display:flex;align-items:center;gap:6px">
+          <span style="font-size:14px">&#128204;</span> DATA LIBRARY
+        </p>
         """, unsafe_allow_html=True)
-
-        _arch_labels = [lbl for lbl, _ in _archive_files]
-        _arch_paths  = {lbl: fp for lbl, fp in _archive_files}
-
-        # ── Highlight active session ──
-        _active_lbl = ""
-        if st.session_state.get("library_active"):
-            _af = os.path.basename(st.session_state.library_active).replace(".csv","")
-            if _af in _arch_labels:
-                _active_lbl = _af
-        if _active_lbl:
-            st.markdown(
-                f'<div style="font-size:9px;color:{TE_ORANGE};font-family:'
-                f"'JetBrains Mono',monospace;margin-bottom:4px\">"
-                f"▶ Active: {_active_lbl}</div>",
-                unsafe_allow_html=True)
-
-        _sel_session = st.selectbox(
-            "📁 Select Session",
-            options=["— choose —"] + _arch_labels,
-            key="lib_selectbox",
-            label_visibility="visible"
-        )
-        _c1, _c2 = st.columns([3, 1])
-        with _c1:
-            if st.button("▶ Load", key="btn_load_library",
-                         use_container_width=True,
-                         disabled=(_sel_session == "— choose —")):
-                _lib_df = load_archive(_arch_paths[_sel_session])
-                if not _lib_df.empty:
-                    st.session_state.library_df     = _lib_df
-                    st.session_state.library_active = _arch_paths[_sel_session]
-                    st.session_state.edited_df      = None
-                    st.session_state.last_file      = f"__library__{_arch_paths[_sel_session]}"
-                    st.rerun()
-        with _c2:
-            if st.button("🗑", key="btn_del_archive",
-                         use_container_width=True,
-                         disabled=(_sel_session == "— choose —"),
-                         help="Delete this archive file"):
+        for _s_fname, _s_lbl, _s_mtime, _s_fpath, _s_kb in _sessions[:6]:
+            # Entry card
+            _s_date = datetime.fromtimestamp(_s_mtime).strftime("%d/%m/%Y %H:%M")
+            st.markdown(f"""
+            <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(232,101,10,0.3);
+                        border-radius:8px;padding:8px 12px;margin-bottom:4px;
+                        display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;opacity:0.7">&#128196;</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;
+                            font-weight:700;color:#F0D0A0;text-transform:uppercase;
+                            letter-spacing:0.5px;white-space:nowrap;overflow:hidden;
+                            text-overflow:ellipsis">{_s_lbl}</div>
+                <div style="font-size:9px;color:rgba(240,200,150,0.5);
+                            font-family:'JetBrains Mono',monospace">
+                  {_s_kb} KB · {_s_date}
+                </div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("LOAD", key=f"load_sess_{_s_fname}",
+                         use_container_width=True):
                 try:
-                    _del_path = _arch_paths[_sel_session]
-                    # Windows-safe: overwrite with empty then remove
-                    open(_del_path, "w").close()
-                    os.remove(_del_path)
-                    if st.session_state.get("library_active") == _del_path:
-                        st.session_state.library_df     = None
-                        st.session_state.library_active = None
-                    st.success(f"🗑 Deleted: {_sel_session}")
+                    _df_sess = pd.read_csv(_s_fpath, low_memory=False)
+                    _df_sess.columns = [str(c).strip() for c in _df_sess.columns]
+                    _df_sess.to_csv(PERSISTENT_CSV, index=False, encoding="utf-8")
+                    st.session_state.edited_df = None
+                    st.session_state.last_file = None
                     st.rerun()
-                except Exception as _de:
-                    st.error(f"Cannot delete: {_de}")
+                except Exception as _se:
+                    st.error(f"Load failed: {_se}")
 
-    if st.session_state.get("_archive_saved"):
-        _saved_name = st.session_state.pop("_archive_saved")
-        st.success(f"✅ Archived: {_saved_name}")
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  SHOW MENU BANNER — rendered when sidebar is hidden, on every page
+# ══════════════════════════════════════════════════════════════════════════════
+if not st.session_state.get("sidebar_open", True):
+    st.markdown(f"""
+    <style>
+    /* Show Menu button — large orange pro button */
+    div[data-testid="stButton"][class*="show-menu-btn"] > button,
+    .show-menu-wrap > div[data-testid="stButton"] > button {{
+        background: linear-gradient(135deg, {TE_ORANGE} 0%, {TE_DARK} 100%) !important;
+        color: white !important;
+        border: 2px solid {TE_ORANGE3} !important;
+        border-radius: 12px !important;
+        font-family: 'Barlow Condensed', sans-serif !important;
+        font-size: 16px !important;
+        font-weight: 900 !important;
+        letter-spacing: 3px !important;
+        text-transform: uppercase !important;
+        padding: 14px 36px !important;
+        height: 52px !important;
+        box-shadow: 0 4px 22px rgba(232,101,10,0.55), 0 0 0 3px rgba(232,101,10,0.12) !important;
+        transition: all 0.22s ease !important;
+        animation: glow-pulse 2.2s ease-in-out infinite !important;
+    }}
+    .show-menu-wrap > div[data-testid="stButton"] > button:hover {{
+        background: linear-gradient(135deg, #F0934A 0%, {TE_ORANGE} 100%) !important;
+        box-shadow: 0 6px 32px rgba(232,101,10,0.8), 0 0 0 5px rgba(232,101,10,0.18) !important;
+        transform: translateY(-2px) !important;
+    }}
+    @keyframes glow-pulse {{
+        0%,100% {{ box-shadow: 0 4px 22px rgba(232,101,10,0.55), 0 0 0 3px rgba(232,101,10,0.12); }}
+        50%      {{ box-shadow: 0 4px 30px rgba(232,101,10,0.85), 0 0 0 7px rgba(232,101,10,0.06); }}
+    }}
+    /* Banner container */
+    .show-menu-banner {{
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        background: linear-gradient(135deg, {TE_BLACK} 0%, #2A1A0A 100%);
+        border: 1px solid rgba(232,101,10,0.35);
+        border-left: 5px solid {TE_ORANGE};
+        border-radius: 12px;
+        padding: 14px 24px;
+        margin-bottom: 18px;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+    }}
+    .show-menu-banner-text {{
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(240,220,200,0.6);
+    }}
+    .show-menu-banner-text strong {{
+        color: {TE_ORANGE};
+        font-size: 12px;
+    }}
+    </style>
+    <div class="show-menu-banner">
+        <div class="show-menu-banner-text">
+            <strong>≡ TE CONNECTIVITY</strong><br>
+            Sidebar is hidden — click to restore navigation
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _sm_c1, _sm_c2, _sm_c3 = st.columns([2, 3, 6])
+    with _sm_c2:
+        st.markdown('<div class="show-menu-wrap">', unsafe_allow_html=True)
+        if st.button(">> Show Menu", key="btn_show_menu", use_container_width=True):
+            st.session_state.sidebar_open = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PAGE: HISTORY
@@ -1359,29 +1459,16 @@ if nav_choice == "History":
         )
         _confirm1, _confirm2, _confirm3 = st.columns([2, 1, 2])
         with _confirm1:
-            if st.button(" Yes, Reset Everything", key="btn_reset_confirm",
-                         help="Permanently reset all persistent data"):
+            if st.button(" Yes, Delete Everything", key="btn_reset_confirm",
+                         help="Confirm permanent deletion"):
                 try:
-                    # Windows-safe: overwrite with empty DataFrame (same columns)
-                    # instead of os.remove() which causes WinError 32 on locked files
-                    _empty_cols = []
-                    if os.path.exists(PERSISTENT_CSV):
-                        try:
-                            _empty_cols = pd.read_csv(
-                                PERSISTENT_CSV, nrows=0, low_memory=False
-                            ).columns.tolist()
-                        except Exception:
-                            pass
-                    pd.DataFrame(columns=_empty_cols).to_csv(
-                        PERSISTENT_CSV, index=False, encoding="utf-8"
-                    )
+                    os.remove(PERSISTENT_CSV)
                     st.session_state.confirm_reset = False
-                    st.session_state.edited_df     = None
-                    st.session_state.library_df    = None
-                    st.success(" History reset. Persistent file cleared (columns preserved).")
+                    st.session_state.edited_df = None
+                    st.success(" History deleted successfully. The persistent file has been removed.")
                     st.rerun()
                 except Exception as _e:
-                    st.error(f" Could not reset: {_e}")
+                    st.error(f" Could not delete file: {_e}")
         with _confirm2:
             if st.button(" Cancel", key="btn_reset_cancel"):
                 st.session_state.confirm_reset = False
@@ -1394,120 +1481,101 @@ if nav_choice == "History":
 #  PAGE: DASHBOARD (default)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  DATA SOURCE PRIORITY
-#  1st: file in uploader  →  read, archive, save to persistent
-#  2nd: library_df explicitly loaded by user via selectbox + LOAD button
-#  → NO auto-load from persistent. Welcome screen until user acts.
-# ══════════════════════════════════════════════════════════════════════════════
-
-# ── Resolve which source is active ───────────────────────────────────────────
-_src = "none"
-if uploaded is not None:
-    _src = "upload"
-elif st.session_state.get("library_df") is not None:
-    _src = "library"
-# NOTE: persistent CSV is intentionally NOT an auto-source.
-# The user must explicitly upload a file or load from DATA LIBRARY.
-
-# ── If nothing available → show welcome screen ───────────────────────────────
-if _src == "none":
-    _n_arch = len(list_archive())
-    _arch_hint = (
-        f'<div style="background:#FFF8F0;border:1.5px solid #FAC98A;'
-        f'border-radius:8px;padding:10px 16px;margin-top:12px;'
-        f'font-size:12px;color:#7A4A20;text-align:center">'
-        f'📌 <strong>{_n_arch}</strong> saved session{"s" if _n_arch != 1 else ""} available'
-        f' in the DATA LIBRARY — select one below to restore it.'
-        f'</div>'
-    ) if _n_arch > 0 else ""
-
-    st.markdown(f"""
-    <div style="display:flex;justify-content:center;align-items:center;
-                min-height:60vh;margin-top:20px">
-    <div style="background:white;border:2px dashed {TE_ORANGE};border-radius:18px;
-                padding:52px 50px;text-align:center;max-width:540px;
-                box-shadow:0 6px 32px rgba(232,101,10,0.12)">
-        <div style="display:inline-flex;align-items:center;gap:10px;
-                    background:linear-gradient(135deg,{TE_ORANGE},{TE_DARK});
-                    border-radius:10px;padding:10px 22px;
-                    font-family:'Barlow Condensed',sans-serif;font-size:17px;
-                    font-weight:900;letter-spacing:2.5px;color:white;
-                    margin-bottom:24px;box-shadow:0 4px 16px rgba(232,101,10,0.40)">
-            ≡ TE CONNECTIVITY
-        </div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:32px;
-                    font-weight:800;color:{TE_BLACK};text-transform:uppercase;
-                    letter-spacing:2px;margin-bottom:8px;line-height:1.1">
-            STAMPING CMMS
-        </div>
-        <div style="width:50px;height:3px;
-                    background:linear-gradient(90deg,{TE_ORANGE},{TE_ORANGE3});
-                    border-radius:2px;margin:0 auto 18px auto"></div>
-        <div style="font-size:13px;color:#9A7A60;margin-bottom:24px;line-height:1.8">
-            Import your Hydra MES file or load from<br>
-            <strong style="color:{TE_ORANGE}">📌 DATA LIBRARY</strong> in the sidebar.<br>
-            <span style="font-size:11px;color:{TE_ORANGE};font-weight:600">
-                ↑ Use the sidebar to get started
-            </span>
-        </div>
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-            <span style="background:#FFF0E6;border:1px solid {TE_ORANGE3};color:{TE_DARK};
-                         font-size:11px;font-weight:700;border-radius:20px;
-                         padding:5px 14px">.csv comma</span>
-            <span style="background:#FFF0E6;border:1px solid {TE_ORANGE3};color:{TE_DARK};
-                         font-size:11px;font-weight:700;border-radius:20px;
-                         padding:5px 14px">.csv semicolon</span>
-            <span style="background:#FFF0E6;border:1px solid {TE_ORANGE3};color:{TE_DARK};
-                         font-size:11px;font-weight:700;border-radius:20px;
-                         padding:5px 14px">.xlsx</span>
-        </div>
-        {_arch_hint}
-    </div></div>
-    """, unsafe_allow_html=True)
-    st.stop()
-
 # ──────────────────────────────────────────────────────────────────────────────
-#  DATA PREP — load raw data from active source
+#  DATA SOURCE — file uploaded OR auto-load from persistent CSV
 # ──────────────────────────────────────────────────────────────────────────────
+# Logic (evaluated every render):
+#   1. File uploaded by user  → load that file (normal flow)
+#   2. No file BUT persistent CSV exists → auto-load, show green banner, continue
+#   3. Nothing at all → show welcome screen and stop
 
-if _src == "upload":
-    # ── Priority 1: Uploader ─────────────────────────────────────
-    _is_new_file = (st.session_state.get("last_file") != uploaded.name)
-    if _is_new_file:
-        _df_new = load_data(uploaded)
-        if not _df_new.empty and len(_df_new.columns) >= 2:
-            # ✅ Parse succeeded — archive + persist immediately
-            _arc_name = archive_import(_df_new)
-            if _arc_name:
-                st.session_state["_archive_saved"] = _arc_name
-            save_persistent(_df_new)
-            st.session_state.library_df     = None
-            st.session_state.library_active = None
-            st.session_state.last_file      = uploaded.name
-            st.session_state.edited_df      = None
-            df_raw = _df_new.copy()
-        else:
-            # ⚠️ Parse failed — show error, stay on welcome
-            st.error(
-                f"❌ Cannot read **{uploaded.name}**. "
-                "Please check the file format (CSV comma/semicolon or XLSX)."
-            )
-            st.stop()
+if uploaded is None:
+    # ── Try persistent auto-load ──
+    _persist_path_exists = os.path.exists(PERSISTENT_CSV)
+
+    if _persist_path_exists:
+        # Load into session if not already done (or if session was cleared)
+        if st.session_state.get("edited_df") is None or            st.session_state.get("last_file") != "__persistent__":
+            _df_p = load_persistent()
+            if not _df_p.empty:
+                st.session_state.edited_df = _df_p.copy()
+                st.session_state.last_file = "__persistent__"
+
+        # Banner — shown on every render when no file is uploaded
+        _fsize_kb = os.path.getsize(PERSISTENT_CSV) // 1024
+        _fmod_str = datetime.fromtimestamp(
+            os.path.getmtime(PERSISTENT_CSV)).strftime("%d/%m/%Y %H:%M")
+        _n_rows   = len(st.session_state.edited_df) if st.session_state.get("edited_df") is not None else 0
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#0d2818,#1a3d26);
+                    border:1.5px solid #27AE60;border-left:5px solid #27AE60;
+                    border-radius:12px;padding:14px 20px;margin-bottom:18px;
+                    display:flex;align-items:center;gap:14px">
+          <div style="font-size:22px;font-weight:900;color:#27AE60;line-height:1">OK</div>
+          <div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;
+                        font-weight:800;color:#27AE60;text-transform:uppercase;
+                        letter-spacing:1px">Data loaded from last session</div>
+            <div style="font-size:11px;color:#a8d5b5;margin-top:3px">
+              {_fsize_kb} KB &nbsp;·&nbsp; {_fmod_str} &nbsp;·&nbsp; {_n_rows:,} rows
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Use session data as df_raw — set a sentinel so downstream knows
+        df_raw = st.session_state.edited_df.copy()
+        # Ensure required columns exist
+        for _rc in REQUIRED_COLS:
+            if _rc not in df_raw.columns:
+                df_raw[_rc] = 0.0 if _rc in (COL_MTTR, COL_MTBF) else ""
     else:
-        df_raw = load_data(uploaded)    # uses cached bytes — instant
+        # ── No file, no persistent → welcome screen ──
+        st.markdown(f"""
+        <div style="display:flex;justify-content:center;margin-top:60px">
+        <div style="background:white;border:2px dashed #F0C8A0;border-radius:18px;
+                    padding:48px 44px;text-align:center;max-width:520px;
+                    box-shadow:0 4px 24px rgba(0,0,0,0.07)">
+            <div style="display:inline-flex;align-items:center;gap:8px;
+                        background:{TE_ORANGE};border-radius:8px;padding:8px 18px;
+                        font-family:'Barlow Condensed',sans-serif;font-size:16px;
+                        font-weight:800;letter-spacing:2px;color:white;margin-bottom:20px">
+                ≡ TE CONNECTIVITY
+            </div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;
+                        font-weight:800;color:#1C1C1C;text-transform:uppercase;
+                        letter-spacing:1px;margin-bottom:12px">Stamping CMMS</div>
+            <div style="font-size:13px;color:#9A7A60;margin-bottom:20px;line-height:1.7">
+                Import your Hydra MES file<br>
+                to visualize the maintenance KPIs of Bruderer presses.
+            </div>
+            <div>
+                <span style="background:#FFF0E6;border:1px solid #F5C8A0;color:#B36030;
+                             font-size:11px;font-weight:600;border-radius:20px;
+                             padding:4px 12px;margin:3px;display:inline-block">.csv comma</span>
+                <span style="background:#FFF0E6;border:1px solid #F5C8A0;color:#B36030;
+                             font-size:11px;font-weight:600;border-radius:20px;
+                             padding:4px 12px;margin:3px;display:inline-block">.csv semicolon</span>
+                <span style="background:#FFF0E6;border:1px solid #F5C8A0;color:#B36030;
+                             font-size:11px;font-weight:600;border-radius:20px;
+                             padding:4px 12px;margin:3px;display:inline-block">.xlsx</span>
+            </div>
+        </div></div>
+        """, unsafe_allow_html=True)
+        st.stop()
 
-elif _src == "library":
-    # ── Priority 2: Library (explicit user action only) ──────────
-    df_raw = st.session_state.library_df.copy()
-    _lib_key = f"__lib__{st.session_state.get('library_active','')}"
-    if st.session_state.get("last_file") != _lib_key:
-        st.session_state.last_file = _lib_key
+# ──────────────────────────────────────────────────────────────────────────────
+#  DATA PREP — only runs when a new file is uploaded
+# ──────────────────────────────────────────────────────────────────────────────
+# If uploaded is None we already have df_raw from persistent above.
+# If uploaded is not None, load it normally.
+if uploaded is not None:
+    if "last_file" not in st.session_state or st.session_state.last_file != uploaded.name:
+        st.session_state.last_file = uploaded.name
         st.session_state.edited_df = None
-
-else:
-    # Should not reach here — welcome screen already stopped execution
-    st.stop()
+    df_raw = load_data(uploaded)
+    if df_raw.empty:
+        st.stop()
 
 df_raw = df_raw.loc[:, ~df_raw.columns.duplicated()]
 
@@ -1586,13 +1654,6 @@ if COL_DATE in df_raw.columns:
     df_raw["date_only"] = df_raw[COL_DATE].dt.normalize()
     if df_raw["date_only"].notna().sum() == 0:
         st.warning(f" Column `{COL_DATE}`: no valid date parsed.")
-    else:
-        # ── Store active period so sidebar can display it ──
-        _valid_dates = df_raw["date_only"].dropna()
-        st.session_state["active_period"] = (
-            _valid_dates.min().strftime("%d/%m/%Y"),
-            _valid_dates.max().strftime("%d/%m/%Y"),
-        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1619,19 +1680,12 @@ with st.sidebar:
         dr = None
 
     st.markdown("---")
-    if _src == "upload" and uploaded is not None:
-        _src_name = uploaded.name
-    elif _src == "library":
-        _src_name = os.path.basename(st.session_state.get("library_active", "Library"))
-    else:
-        _src_name = os.path.basename(PERSISTENT_CSV)
     st.markdown(f"""
     <div style="font-size:10px;color:rgba(255,255,255,0.3);
                 font-family:'JetBrains Mono',monospace;letter-spacing:1px">
-         {_src_name}<br>
+         {uploaded.name}<br>
          {len(df_raw):,} rows<br>
-         Persistent: {"✓" if os.path.exists(PERSISTENT_CSV) else "none"}<br>
-         Archive: {len(list_archive())} file(s)<br><br>
+         Persistent: {" " + str(os.path.exists(PERSISTENT_CSV)) if os.path.exists(PERSISTENT_CSV) else " none"}<br><br>
         TE CONNECTIVITY © {datetime.now().year}
     </div>
     """, unsafe_allow_html=True)
@@ -3051,11 +3105,18 @@ with tab_qual:
                 pd.to_numeric(_df_show["Unit Price (€)"], errors="coerce").fillna(0.0)
             ).round(2)
 
+        # Columns that must be fully read-only (disabled at editor level)
+        _disabled_cols = [c for c in [
+            "machine_id", "machine_status_name", "plant_shift_date",
+            "mttr_h", "Total Part Cost",
+        ] if c in _df_show.columns]
+
         _edited = st.data_editor(
             _df_show,
             use_container_width=True,
             height=min(700, max(250, _n_shown * 42 + 62)),
             num_rows="fixed",
+            disabled=_disabled_cols,
             column_order=_display_cols,
             column_config={
                 COL_MACHINE: st.column_config.TextColumn(
@@ -3198,12 +3259,9 @@ with tab_qual:
                 _df_full.to_excel(_writer, sheet_name="Full Dataset", index=False)
                 _style_sheet(_writer.sheets["Full Dataset"], _df_full)
 
-                # ── Stops sheet: ONLY real stops (mttr_h > 0), NO production rows ──
-                _mask_stops = (
-                    pd.to_numeric(_src.get("mttr_h", pd.Series([0]*len(_src))),
-                                  errors="coerce").fillna(0) > 0
-                )
-                _stops = _src[_mask_stops].copy().reset_index(drop=True)
+                _mask_stops = (_src["mttr_h"] > 0 if "mttr_h" in _src.columns
+                               else pd.Series(True, index=_src.index))
+                _stops = _src[_mask_stops].copy()
                 _stops_cols = [c for c in [
                     COL_MACHINE, COL_DATE, COL_STATUS, "MTTR (h)",
                     "User ID", "Shift", "Key Failure",
@@ -3295,6 +3353,7 @@ with tab_qual:
             ).round(2)
             st.session_state.edited_df = _edf2
             save_persistent(st.session_state.edited_df)
+            save_session_backup(st.session_state.edited_df)
             st.session_state["_save_result"] = _n_saved
             st.rerun()
 
