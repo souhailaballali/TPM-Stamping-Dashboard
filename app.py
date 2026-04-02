@@ -440,6 +440,92 @@ section[data-testid="stSidebar"] [data-testid="stFileUploaderFileName"] {{
 ::-webkit-scrollbar-thumb {{ background: {TE_ORANGE3}; border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {TE_ORANGE}; }}
 
+/* ══════════════════════════════════════════════════════════════
+   GLOBAL LABEL BACKGROUND FIX
+   Removes the white rectangular capsule Streamlit adds behind
+   every widget label (PERIOD, EXACT DATE, MACHINES, etc.)
+   ══════════════════════════════════════════════════════════════ */
+
+/* 1. The wrapping container Streamlit uses for all widget labels */
+[data-testid="stWidgetLabel"],
+[data-testid="stWidgetLabel"] *,
+[data-baseweb="form-control"] > div:first-child,
+[data-baseweb="form-control"] > label {{
+    background-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+}}
+
+/* 2. Every label element everywhere — force transparent */
+label {{
+    background-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}}
+
+/* 3. The <p> tag Streamlit wraps the label text in */
+[data-testid="stWidgetLabel"] p {{
+    background-color: transparent !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+}}
+
+/* 4. Main area labels: dark brown text, no background */
+.stApp [data-testid="stWidgetLabel"] p,
+.stApp label p,
+.stApp .stSelectbox label,
+.stApp .stDateInput label,
+.stApp .stTextInput label,
+.stApp .stNumberInput label,
+.stApp .stMultiSelect label,
+.stApp .stRadio label p {{
+    color: #5D4037 !important;
+    background-color: transparent !important;
+    background: transparent !important;
+    font-family: 'Barlow', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+}}
+
+/* 5. Sidebar labels: orange text, no background */
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+[data-testid="stSidebar"] label p,
+[data-testid="stSidebar"] label {{
+    background-color: transparent !important;
+    background: transparent !important;
+    color: {TE_ORANGE} !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    letter-spacing: 3px !important;
+    text-transform: uppercase !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+}}
+
+/* 6. Keep input field text dark brown (#5D4037) */
+[data-testid="stSidebar"] input,
+[data-testid="stSidebar"] [data-baseweb="input"] input {{
+    color: #5D4037 !important;
+    background: white !important;
+}}
+.stApp input:not([type="radio"]):not([type="checkbox"]),
+.stApp select,
+.stApp textarea {{
+    color: #5D4037 !important;
+    background-color: white !important;
+}}
+.stApp [data-baseweb="select"] div[class*="singleValue"],
+.stApp [data-baseweb="select"] div[class*="placeholder"] {{
+    color: #5D4037 !important;
+    background-color: transparent !important;
+}}
+
 /* ══════════════════════════════════════════════════════
    INPUT FIELDS — Force dark brown text on white bg
    Fixes: selectbox, date_input, text_input placeholders
@@ -2136,7 +2222,7 @@ with tab_kpi:
                 except: return ""
             st.dataframe(
                 _tbl.style
-                    .applymap(_sd, subset=["Availability (%)"])
+                    .map(_sd, subset=["Availability (%)"])
                     .format({"Availability (%)": "{:.2f}%",
                              "Mean MTTR (h)": "{:.4f}",
                              "Mean MTBF (h)": "{:.4f}"}),
@@ -2490,8 +2576,8 @@ with tab_kpi:
 
     st.dataframe(
         ma_disp.style
-            .applymap(style_dispo, subset=["Availability (%)"])
-            .applymap(style_mttr,  subset=["Mean MTTR (h)"])
+            .map(style_dispo, subset=["Availability (%)"])
+            .map(style_mttr,  subset=["Mean MTTR (h)"])
             .format({"Mean MTTR (h)":"{:.4f}","Mean MTBF (h)":"{:.4f}",
                      "Availability (%)":"{:.1f}%"}),
         use_container_width=True, hide_index=True
